@@ -35,19 +35,37 @@ defmodule NbRoutes.Generator do
       end)
 
     # Handle duplicate helper names by appending action name
-    routes_with_metadata
-    |> Enum.group_by(fn {route, _action} -> route.name end)
+    routes =
+      routes_with_metadata
+      |> Enum.group_by(fn {route, _action} -> route.name end)
+      |> Enum.flat_map(fn
+        {_name, [{single_route, _action}]} ->
+          # Only one route with this name, keep as is
+          [single_route]
+
+        {_name, multiple_routes} ->
+          # Multiple routes with same helper name, append action to make unique
+          Enum.map(multiple_routes, fn {route, action} ->
+            # Remove _path suffix, append action, then add _path back
+            base_name = String.replace_suffix(route.name, "_path", "")
+            %{route | name: "#{base_name}_#{action}_path"}
+          end)
+      end)
+
+    # Final pass: ensure all names are unique by appending index if needed
+    routes
+    |> Enum.group_by(& &1.name)
     |> Enum.flat_map(fn
-      {_name, [{single_route, _action}]} ->
-        # Only one route with this name, keep as is
+      {_name, [single_route]} ->
         [single_route]
 
-      {_name, multiple_routes} ->
-        # Multiple routes with same helper name, append action to make unique
-        Enum.map(multiple_routes, fn {route, action} ->
-          # Remove _path suffix, append action, then add _path back
+      {_name, duplicate_routes} ->
+        # Still have duplicates after appending action, append index
+        duplicate_routes
+        |> Enum.with_index(1)
+        |> Enum.map(fn {route, index} ->
           base_name = String.replace_suffix(route.name, "_path", "")
-          %{route | name: "#{base_name}_#{action}_path"}
+          %{route | name: "#{base_name}_#{index}_path"}
         end)
     end)
   end

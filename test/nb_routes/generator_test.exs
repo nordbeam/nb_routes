@@ -93,6 +93,67 @@ defmodule NbRoutes.GeneratorTest do
     end
   end
 
+  describe "extract_routes/2 with same helper and same action" do
+    defmodule TestRouterWithConflicts do
+      @moduledoc false
+
+      def __routes__ do
+        [
+          # Two routes with same helper AND same action (edge case)
+          %{
+            helper: "user",
+            verb: :GET,
+            path: "/api/users/:id",
+            plug_opts: :show
+          },
+          %{
+            helper: "user",
+            verb: :GET,
+            path: "/admin/users/:id",
+            plug_opts: :show
+          },
+          # Regular unique route
+          %{
+            helper: "post",
+            verb: :GET,
+            path: "/posts/:id",
+            plug_opts: :show
+          }
+        ]
+      end
+    end
+
+    test "handles same helper + same action by appending index" do
+      routes = Generator.extract_routes(TestRouterWithConflicts)
+
+      # Should have user_show_1_path and user_show_2_path
+      user_show_1 = Enum.find(routes, &(&1.name == "user_show_1_path"))
+      user_show_2 = Enum.find(routes, &(&1.name == "user_show_2_path"))
+
+      assert user_show_1
+      assert user_show_2
+      assert user_show_1.path in ["/api/users/:id", "/admin/users/:id"]
+      assert user_show_2.path in ["/api/users/:id", "/admin/users/:id"]
+      assert user_show_1.path != user_show_2.path
+    end
+
+    test "ensures all generated names are unique" do
+      routes = Generator.extract_routes(TestRouterWithConflicts)
+
+      # Check no duplicate names
+      names = Enum.map(routes, & &1.name)
+      assert length(names) == length(Enum.uniq(names))
+    end
+
+    test "keeps unique routes unchanged" do
+      routes = Generator.extract_routes(TestRouterWithConflicts)
+
+      # post_path should remain as is since it's unique
+      post_route = Enum.find(routes, &(&1.name == "post_path"))
+      assert post_route
+    end
+  end
+
   describe "extract_routes/2 with include/exclude" do
     test "respects include pattern" do
       routes = Generator.extract_routes(TestRouter, include: [~r/^user/])
