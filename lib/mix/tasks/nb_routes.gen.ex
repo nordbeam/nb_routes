@@ -19,6 +19,9 @@ defmodule Mix.Tasks.NbRoutes.Gen do
     * `--camel-case` - Convert route names to camelCase
     * `--compact` - Remove _path suffix from route names
     * `--url-helpers` - Generate URL helpers (*_url) in addition to path helpers
+    * `--variant` - Route helper variant: simple or rich (default: simple)
+    * `--with-methods` - Enable method variants (.get, .post, .url, etc.)
+    * `--with-forms` - Enable form helpers (.form, .form.patch, etc.)
 
   ## Examples
 
@@ -37,6 +40,9 @@ defmodule Mix.Tasks.NbRoutes.Gen do
       # Generate with camelCase names
       mix nb_routes.gen --camel-case
 
+      # Generate rich mode with form helpers
+      mix nb_routes.gen --variant rich --with-methods --with-forms
+
   """
 
   use Mix.Task
@@ -54,6 +60,9 @@ defmodule Mix.Tasks.NbRoutes.Gen do
           router: :string,
           output: :string,
           module_type: :string,
+          variant: :string,
+          with_methods: :boolean,
+          with_forms: :boolean,
           types: :boolean,
           include: :keep,
           exclude: :keep,
@@ -171,6 +180,37 @@ defmodule Mix.Tasks.NbRoutes.Gen do
     config_opts =
       if Keyword.get(opts, :url_helpers) do
         Keyword.put(config_opts, :url_helpers, true)
+      else
+        config_opts
+      end
+
+    # Handle variant option
+    config_opts =
+      if variant = Keyword.get(opts, :variant) do
+        variant_atom =
+          case String.downcase(variant) do
+            "simple" -> :simple
+            "rich" -> :rich
+            other -> raise ArgumentError, "Invalid variant: #{other}. Must be 'simple' or 'rich'"
+          end
+
+        Keyword.put(config_opts, :variant, variant_atom)
+      else
+        config_opts
+      end
+
+    # Handle with_methods option
+    config_opts =
+      if Keyword.get(opts, :with_methods) do
+        Keyword.put(config_opts, :with_methods, true)
+      else
+        config_opts
+      end
+
+    # Handle with_forms option
+    config_opts =
+      if Keyword.get(opts, :with_forms) do
+        Keyword.put(config_opts, :with_forms, true)
       else
         config_opts
       end
