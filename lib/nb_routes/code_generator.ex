@@ -13,6 +13,9 @@ defmodule NbRoutes.CodeGenerator do
   def generate(routes, %Configuration{} = config) do
     runtime = load_runtime()
 
+    # Extract route names for exports
+    route_names = Enum.map(routes, & &1.name)
+
     parts = [
       generate_header(config),
       "",
@@ -32,7 +35,7 @@ defmodule NbRoutes.CodeGenerator do
       end
 
     parts =
-      parts ++ ["", generate_exports(config)]
+      parts ++ ["", generate_exports(route_names, config)]
 
     Enum.join(parts, "\n")
   end
@@ -566,8 +569,13 @@ defmodule NbRoutes.CodeGenerator do
     """
   end
 
-  defp generate_exports(%Configuration{module_type: :esm, variant: :rich}) do
+  defp generate_exports(route_names, %Configuration{module_type: :esm, variant: :rich}) do
+    exports = Enum.join(route_names, ", ")
+
     """
+    // Route helpers
+    export { #{exports} };
+
     // Configuration functions
     export const configure = (options) => _builder.configure(options);
     export const config = () => _builder.getConfig();
@@ -575,16 +583,26 @@ defmodule NbRoutes.CodeGenerator do
     """
   end
 
-  defp generate_exports(%Configuration{module_type: :esm}) do
+  defp generate_exports(route_names, %Configuration{module_type: :esm}) do
+    exports = Enum.join(route_names, ", ")
+
     """
+    // Route helpers
+    export { #{exports} };
+
     // Configuration functions
     export const configure = (options) => _builder.configure(options);
     export const config = () => _builder.getConfig();
     """
   end
 
-  defp generate_exports(%Configuration{module_type: :cjs, variant: :rich}) do
+  defp generate_exports(route_names, %Configuration{module_type: :cjs, variant: :rich}) do
+    exports = Enum.map_join(route_names, "\n", &"module.exports.#{&1} = #{&1};")
+
     """
+    // Route helpers
+    #{exports}
+
     // Configuration functions
     module.exports.configure = (options) => _builder.configure(options);
     module.exports.config = () => _builder.getConfig();
@@ -593,56 +611,69 @@ defmodule NbRoutes.CodeGenerator do
     """
   end
 
-  defp generate_exports(%Configuration{module_type: :cjs}) do
+  defp generate_exports(route_names, %Configuration{module_type: :cjs}) do
+    exports = Enum.map_join(route_names, "\n", &"module.exports.#{&1} = #{&1};")
+
     """
+    // Route helpers
+    #{exports}
+
     // Configuration functions
     module.exports.configure = (options) => _builder.configure(options);
     module.exports.config = () => _builder.getConfig();
     """
   end
 
-  defp generate_exports(%Configuration{module_type: :umd, variant: :rich}) do
+  defp generate_exports(route_names, %Configuration{module_type: :umd, variant: :rich}) do
     # UMD exports both CommonJS and AMD style
+    route_exports = Enum.join(route_names, ", ")
+
     """
     // Configuration functions
     const configure = (options) => _builder.configure(options);
     const config = () => _builder.getConfig();
 
     if (typeof module !== 'undefined' && module.exports) {
-      module.exports = { configure, config, _buildUrl, visitRoute };
+      module.exports = { #{route_exports}, configure, config, _buildUrl, visitRoute };
     } else if (typeof define === 'function' && define.amd) {
-      define([], function() { return { configure, config, _buildUrl, visitRoute }; });
+      define([], function() { return { #{route_exports}, configure, config, _buildUrl, visitRoute }; });
     } else {
       this.Routes = this.Routes || {};
       this.Routes.configure = configure;
       this.Routes.config = config;
       this.Routes._buildUrl = _buildUrl;
       this.Routes.visitRoute = visitRoute;
+      #{Enum.map_join(route_names, "\n  ", &"this.Routes.#{&1} = #{&1};")}
     }
     """
   end
 
-  defp generate_exports(%Configuration{module_type: :umd}) do
+  defp generate_exports(route_names, %Configuration{module_type: :umd}) do
     # UMD exports both CommonJS and AMD style
+    route_exports = Enum.join(route_names, ", ")
+
     """
     // Configuration functions
     const configure = (options) => _builder.configure(options);
     const config = () => _builder.getConfig();
 
     if (typeof module !== 'undefined' && module.exports) {
-      module.exports = { configure, config };
+      module.exports = { #{route_exports}, configure, config };
     } else if (typeof define === 'function' && define.amd) {
-      define([], function() { return { configure, config }; });
+      define([], function() { return { #{route_exports}, configure, config }; });
     } else {
       this.Routes = this.Routes || {};
       this.Routes.configure = configure;
       this.Routes.config = config;
+      #{Enum.map_join(route_names, "\n  ", &"this.Routes.#{&1} = #{&1};")}
     }
     """
   end
 
-  defp generate_exports(%Configuration{module_type: nil, variant: :rich}) do
+  defp generate_exports(route_names, %Configuration{module_type: nil, variant: :rich}) do
     # Global namespace
+    exports = Enum.map_join(route_names, "\n", &"window.Routes.#{&1} = #{&1};")
+
     """
     // Configuration functions
     window.Routes = window.Routes || {};
@@ -650,16 +681,20 @@ defmodule NbRoutes.CodeGenerator do
     window.Routes.config = () => _builder.getConfig();
     window.Routes._buildUrl = _buildUrl;
     window.Routes.visitRoute = visitRoute;
+    #{exports}
     """
   end
 
-  defp generate_exports(%Configuration{module_type: nil}) do
+  defp generate_exports(route_names, %Configuration{module_type: nil}) do
     # Global namespace
+    exports = Enum.map_join(route_names, "\n", &"window.Routes.#{&1} = #{&1};")
+
     """
     // Configuration functions
     window.Routes = window.Routes || {};
     window.Routes.configure = (options) => _builder.configure(options);
     window.Routes.config = () => _builder.getConfig();
+    #{exports}
     """
   end
 
