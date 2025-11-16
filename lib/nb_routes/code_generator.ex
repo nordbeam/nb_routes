@@ -152,15 +152,17 @@ defmodule NbRoutes.CodeGenerator do
   end
 
   defp example_path(route, values) do
-    route.path
-    |> String.replace(~r/:(\w+)/, fn _, param ->
-      index = Enum.find_index(route.required_params, &(&1 == param))
+    # Build path by replacing each parameter
+    path =
+      route.required_params
+      |> Enum.with_index()
+      |> Enum.reduce(route.path, fn {param, idx}, acc ->
+        value = Enum.at(values, idx, "1") || "1"
+        String.replace(acc, ":#{param}", to_string(value))
+      end)
 
-      case index do
-        nil -> "1"
-        idx -> Enum.at(values, idx, "1") || "1"
-      end
-    end)
+    # Remove optional segments
+    path
     |> String.replace(~r/\([^)]*\)/, "")
   end
 
