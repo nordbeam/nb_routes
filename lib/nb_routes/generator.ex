@@ -63,12 +63,25 @@ defmodule NbRoutes.Generator do
   defp has_helper?(%Phoenix.Router.Route{helper: nil}), do: false
   defp has_helper?(%Phoenix.Router.Route{helper: ""}), do: false
   defp has_helper?(%Phoenix.Router.Route{}), do: true
+  # Handle plain maps (Phoenix 1.8+)
+  defp has_helper?(%{helper: nil}), do: false
+  defp has_helper?(%{helper: ""}), do: false
+  defp has_helper?(%{helper: _}), do: true
+  defp has_helper?(_), do: false
 
   # Filter routes based on configuration include/exclude patterns
   defp filter_route(%Phoenix.Router.Route{helper: helper}, %Configuration{
          include: include,
          exclude: exclude
        }) do
+    included? = Enum.empty?(include) || Enum.any?(include, &Regex.match?(&1, helper))
+    excluded? = Enum.any?(exclude, &Regex.match?(&1, helper))
+
+    included? && !excluded?
+  end
+
+  # Handle plain maps (Phoenix 1.8+)
+  defp filter_route(%{helper: helper}, %Configuration{include: include, exclude: exclude}) do
     included? = Enum.empty?(include) || Enum.any?(include, &Regex.match?(&1, helper))
     excluded? = Enum.any?(exclude, &Regex.match?(&1, helper))
 

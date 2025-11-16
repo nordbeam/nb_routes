@@ -48,7 +48,9 @@ defmodule NbRoutes.Route do
       }
 
   """
-  def from_phoenix_route(%Phoenix.Router.Route{} = phoenix_route, opts \\ []) do
+  def from_phoenix_route(phoenix_route, opts \\ [])
+
+  def from_phoenix_route(%Phoenix.Router.Route{} = phoenix_route, opts) do
     name = generate_name(phoenix_route.helper, opts)
     segments = parse_path_segments(phoenix_route.path)
     {required, optional} = categorize_params(segments)
@@ -57,6 +59,23 @@ defmodule NbRoutes.Route do
       name: name,
       verb: phoenix_route.verb,
       path: phoenix_route.path,
+      segments: segments,
+      required_params: required,
+      optional_params: optional,
+      defaults: Map.new()
+    }
+  end
+
+  # Handle plain maps (Phoenix 1.8+)
+  def from_phoenix_route(%{helper: helper, verb: verb, path: path} = _phoenix_route, opts) do
+    name = generate_name(helper, opts)
+    segments = parse_path_segments(path)
+    {required, optional} = categorize_params(segments)
+
+    %__MODULE__{
+      name: name,
+      verb: verb,
+      path: path,
       segments: segments,
       required_params: required,
       optional_params: optional,
