@@ -292,21 +292,24 @@ defmodule NbRoutes.CodeGenerator do
   defp generate_route_helper(route, params, spec, absolute, config) do
     case config.variant do
       :simple ->
-        generate_simple_route_helper(route, params, spec, absolute)
+        generate_simple_route_helper(route, params, spec, absolute, config)
 
       :rich ->
         generate_rich_route_helper(route, params, spec, absolute, config)
     end
   end
 
-  defp generate_simple_route_helper(route, params, spec, absolute) do
+  defp generate_simple_route_helper(route, params, spec, absolute, config) do
     params_js = inspect_js_object(params)
     spec_js = inspect_js(spec)
+
+    # Use export const for ESM, plain const for others
+    declaration = if config.module_type == :esm, do: "export const", else: "const"
 
     case route do
       %Route{name: name} ->
         """
-        const #{name} = /*#__PURE__*/ _builder.route(
+        #{declaration} #{name} = /*#__PURE__*/ _builder.route(
           #{params_js},
           #{spec_js},
           #{absolute}
@@ -353,8 +356,11 @@ defmodule NbRoutes.CodeGenerator do
         method_variants
       end
 
+    # Use export const for ESM, plain const for others
+    declaration = if config.module_type == :esm, do: "export const", else: "const"
+
     """
-    const #{route.name} = Object.assign(
+    #{declaration} #{route.name} = Object.assign(
       #{indent(main_fn, 2)},
       #{indent(all_variants, 2)}
     );
@@ -569,13 +575,8 @@ defmodule NbRoutes.CodeGenerator do
     """
   end
 
-  defp generate_exports(route_names, %Configuration{module_type: :esm, variant: :rich}) do
-    exports = Enum.join(route_names, ", ")
-
+  defp generate_exports(_route_names, %Configuration{module_type: :esm, variant: :rich}) do
     """
-    // Route helpers
-    export { #{exports} };
-
     // Configuration functions
     export const configure = (options) => _builder.configure(options);
     export const config = () => _builder.getConfig();
@@ -583,13 +584,8 @@ defmodule NbRoutes.CodeGenerator do
     """
   end
 
-  defp generate_exports(route_names, %Configuration{module_type: :esm}) do
-    exports = Enum.join(route_names, ", ")
-
+  defp generate_exports(_route_names, %Configuration{module_type: :esm}) do
     """
-    // Route helpers
-    export { #{exports} };
-
     // Configuration functions
     export const configure = (options) => _builder.configure(options);
     export const config = () => _builder.getConfig();
