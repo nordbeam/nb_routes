@@ -42,6 +42,107 @@ defmodule NbRoutes.TypeGenerator do
     |> String.trim()
   end
 
+  defp generate_types(%Configuration{variant: :rich, with_forms: true}) do
+    """
+    /**
+     * Valid route parameter types
+     */
+    export type RouteParameter = string | number | boolean;
+
+    /**
+     * Result returned by rich route helpers
+     */
+    export interface RouteResult {
+      /** Generated URL */
+      url: string;
+      /** HTTP method */
+      method: 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head' | 'options';
+    }
+
+    /**
+     * Attributes for HTML form elements
+     */
+    export interface FormAttributes {
+      /** Form action URL (with method spoofing via _method parameter if needed) */
+      action: string;
+      /** Form method (always 'get' or 'post') */
+      method: 'get' | 'post';
+    }
+
+    /**
+     * Options that can be passed to route helpers
+     */
+    export interface RouteOptions {
+      /** URL anchor (hash) */
+      anchor?: string;
+      /** Query string parameters to append */
+      query?: Record<string, RouteParameter>;
+      /** Query string parameters to merge with existing query */
+      mergeQuery?: Record<string, RouteParameter | null | undefined>;
+    }
+
+    /**
+     * Default URL options for absolute URLs
+     */
+    export interface DefaultUrlOptions {
+      /** URL scheme (http, https) */
+      scheme?: string;
+      /** Host name */
+      host?: string;
+      /** Port number */
+      port?: number;
+    }
+
+    /**
+     * Configuration options for route generation
+     */
+    export interface RouteConfig {
+      defaultUrlOptions?: DefaultUrlOptions;
+      trailingSlash?: boolean;
+    }
+
+    /**
+     * Route helper function with method and form variants
+     */
+    export interface RouteHelperWithForm<TParams extends any[] = any[]> {
+      /** Main helper - returns RouteResult with url and method */
+      (...args: TParams): RouteResult;
+      /** GET method variant */
+      get(...args: TParams): RouteResult;
+      /** HEAD method variant */
+      head(...args: TParams): RouteResult;
+      /** URL-only variant - returns just the URL string */
+      url(...args: TParams): string;
+      /** Form helper - returns FormAttributes for use with HTML forms */
+      form: {
+        /** Main form helper - uses the route's original HTTP method */
+        (...args: TParams): FormAttributes;
+        /** PATCH form variant */
+        patch(...args: TParams): FormAttributes;
+        /** PUT form variant */
+        put(...args: TParams): FormAttributes;
+        /** DELETE form variant */
+        delete(...args: TParams): FormAttributes;
+      };
+    }
+
+    /**
+     * Route helper function with method variants (no form support)
+     */
+    export interface RouteHelper<TParams extends any[] = any[]> {
+      /** Main helper - returns RouteResult with url and method */
+      (...args: TParams): RouteResult;
+      /** GET method variant */
+      get(...args: TParams): RouteResult;
+      /** HEAD method variant */
+      head(...args: TParams): RouteResult;
+      /** URL-only variant - returns just the URL string */
+      url(...args: TParams): string;
+    }
+    """
+    |> String.trim()
+  end
+
   defp generate_types(%Configuration{variant: :rich}) do
     """
     /**
@@ -165,8 +266,9 @@ defmodule NbRoutes.TypeGenerator do
     |> Enum.join("\n\n")
   end
 
-  defp generate_route_type(%Route{} = route, _config) do
+  defp generate_route_type(%Route{} = route, config) do
     type_signature = generate_type_signature(route)
+    helper_interface = get_helper_interface(route, config)
 
     """
     /**
@@ -175,10 +277,22 @@ defmodule NbRoutes.TypeGenerator do
      * @example
      * #{generate_type_example(route)}
      */
-    export const #{route.name}: RouteHelper<[#{type_signature}]>;
+    export const #{route.name}: #{helper_interface}<[#{type_signature}]>;
     """
     |> String.trim()
   end
+
+  defp get_helper_interface(%Route{verb: verb}, %Configuration{with_forms: true, variant: :rich}) do
+    method = verb |> to_string() |> String.downcase()
+
+    if method in ["post", "patch", "put", "delete"] do
+      "RouteHelperWithForm"
+    else
+      "RouteHelper"
+    end
+  end
+
+  defp get_helper_interface(_route, _config), do: "RouteHelper"
 
   defp generate_type_signature(%Route{required_params: [], optional_params: []}) do
     "options?: RouteOptions"

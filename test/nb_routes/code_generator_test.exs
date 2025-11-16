@@ -233,4 +233,115 @@ defmodule NbRoutes.CodeGeneratorTest do
       assert code =~ ~s|_buildUrl("/users/:user_id/posts/:id", { user_id, id }, options)|
     end
   end
+
+  describe "generate/2 with forms enabled" do
+    test "generates form helpers for mutation routes" do
+      routes = [
+        %Route{
+          name: "update_user_path",
+          verb: :PATCH,
+          path: "/users/:id",
+          segments: ["/users/", :id],
+          required_params: ["id"],
+          optional_params: []
+        }
+      ]
+
+      config = %Configuration{variant: :rich, with_forms: true}
+      code = CodeGenerator.generate(routes, config)
+
+      # Should have .form property
+      assert code =~ "form: Object.assign("
+
+      # Should have main form function
+      assert code =~ ~s|action: _buildFormAction("/users/:id", { id }, "patch", options)|
+      assert code =~ ~s|method: "post"|
+
+      # Should have method-specific form variants
+      assert code =~ "patch: function(id, options)"
+      assert code =~ "put: function(id, options)"
+      assert code =~ "delete: function(id, options)"
+    end
+
+    test "does not generate form helpers for GET routes" do
+      routes = [
+        %Route{
+          name: "user_path",
+          verb: :GET,
+          path: "/users/:id",
+          segments: ["/users/", :id],
+          required_params: ["id"],
+          optional_params: []
+        }
+      ]
+
+      config = %Configuration{variant: :rich, with_forms: true}
+      code = CodeGenerator.generate(routes, config)
+
+      # GET routes should not have .form property
+      refute code =~ "form: Object.assign("
+      # But _buildFormAction helper is still included in runtime for other routes
+      assert code =~ "function _buildFormAction"
+    end
+
+    test "generates form helpers for POST routes" do
+      routes = [
+        %Route{
+          name: "create_user_path",
+          verb: :POST,
+          path: "/users",
+          segments: ["/users"],
+          required_params: [],
+          optional_params: []
+        }
+      ]
+
+      config = %Configuration{variant: :rich, with_forms: true}
+      code = CodeGenerator.generate(routes, config)
+
+      assert code =~ "form: Object.assign("
+      assert code =~ ~s|action: _buildFormAction("/users", {}, "post", options)|
+    end
+
+    test "includes _buildFormAction helper when forms enabled" do
+      routes = [
+        %Route{
+          name: "update_user_path",
+          verb: :PATCH,
+          path: "/users/:id",
+          segments: ["/users/", :id],
+          required_params: ["id"],
+          optional_params: []
+        }
+      ]
+
+      config = %Configuration{variant: :rich, with_forms: true}
+      code = CodeGenerator.generate(routes, config)
+
+      assert code =~
+               "function _buildFormAction(pattern, params = {}, method = 'post', options = {})"
+
+      assert code =~ "Method spoofing for non-GET/POST methods"
+      assert code =~ "_method="
+    end
+
+    test "does not include _buildFormAction when forms disabled" do
+      routes = [
+        %Route{
+          name: "update_user_path",
+          verb: :PATCH,
+          path: "/users/:id",
+          segments: ["/users/", :id],
+          required_params: ["id"],
+          optional_params: []
+        }
+      ]
+
+      config = %Configuration{variant: :rich, with_forms: false}
+      code = CodeGenerator.generate(routes, config)
+
+      refute code =~ "function _buildFormAction"
+      refute code =~ "form: Object.assign("
+    end
+  end
 end

@@ -74,10 +74,18 @@ defmodule NbRoutes.CodeGenerator do
       end
 
     # Add _buildUrl helper for rich mode
-    if config.variant == :rich do
-      base_runtime <> "\n\n" <> generate_build_url_helper()
+    runtime_with_build_url =
+      if config.variant == :rich do
+        base_runtime <> "\n\n" <> generate_build_url_helper()
+      else
+        base_runtime
+      end
+
+    # Add _buildFormAction helper for forms
+    if config.with_forms && config.variant == :rich do
+      runtime_with_build_url <> "\n\n" <> generate_build_form_action_helper()
     else
-      base_runtime
+      runtime_with_build_url
     end
   end
 
@@ -132,6 +140,48 @@ defmodule NbRoutes.CodeGenerator do
       // Handle anchor
       if (options.anchor) {
         url += '#' + encodeURIComponent(options.anchor);
+      }
+
+      return url;
+    }
+    """
+    |> String.trim()
+  end
+
+  defp generate_build_form_action_helper do
+    """
+    /**
+     * Build form action URL with method spoofing (for forms)
+     *
+     * HTML forms only support GET and POST methods. For other HTTP methods (PATCH, PUT, DELETE),
+     * we use POST with a _method parameter that Phoenix's method override plug can handle.
+     *
+     * @param {string} pattern - URL pattern with :param placeholders (e.g., "/users/:id")
+     * @param {Object} params - Parameter values (e.g., { id: 1 })
+     * @param {string} method - HTTP method (get, post, patch, put, delete, head, options)
+     * @param {Object} options - URL options (query, mergeQuery, anchor)
+     * @returns {string} Form action URL with method spoofing if needed
+     *
+     * @example
+     * _buildFormAction("/users/:id", { id: 123 }, "patch", {})
+     * // => "/users/123?_method=PATCH"
+     *
+     * @example
+     * _buildFormAction("/users/:id", { id: 123 }, "delete", { query: { confirm: true } })
+     * // => "/users/123?confirm=true&_method=DELETE"
+     */
+    function _buildFormAction(pattern, params = {}, method = 'post', options = {}) {
+      // Build the base URL
+      let url = _buildUrl(pattern, params, options);
+
+      // Normalize method to lowercase
+      const normalizedMethod = method.toLowerCase();
+
+      // Method spoofing for non-GET/POST methods
+      // HTML forms only support GET and POST, so we use POST with _method parameter
+      if (!['get', 'post'].includes(normalizedMethod)) {
+        const separator = url.includes('?') ? '&' : '?';
+        url += separator + '_method=' + method.toUpperCase();
       }
 
       return url;
@@ -267,17 +317,33 @@ defmodule NbRoutes.CodeGenerator do
     main_fn = generate_route_function(route.name, params_list, route.path, params_obj, method)
 
     # Generate method variants if enabled
-    variants =
+    method_variants =
       if config.with_methods do
         generate_method_variants(route.name, params_list, route.path, params_obj, method)
       else
         "{}"
       end
 
+    # Generate form variants if enabled and route is mutation
+    form_variants =
+      if config.with_forms && is_mutation_route?(method) do
+        generate_form_variants(params_list, route.path, params_obj, method)
+      else
+        nil
+      end
+
+    # Combine variants
+    all_variants =
+      if form_variants do
+        merge_variants(method_variants, form_variants)
+      else
+        method_variants
+      end
+
     """
     const #{route.name} = Object.assign(
       #{indent(main_fn, 2)},
-      #{indent(variants, 2)}
+      #{indent(all_variants, 2)}
     );
     """
     |> String.trim()
@@ -360,6 +426,71 @@ defmodule NbRoutes.CodeGenerator do
     }
     """
     |> String.trim()
+  end
+
+  defp is_mutation_route?(method) do
+    method in ["post", "patch", "put", "delete"]
+  end
+
+  defp generate_form_variants(params_list, path, params_obj, original_method) do
+    fn_params = if params_list == "", do: "options", else: "#{params_list}, options"
+
+    # Main .form function
+    form_main = """
+    function(#{fn_params}) {
+      return {
+        action: _buildFormAction("#{path}", #{params_obj}, "#{original_method}", options),
+        method: "post"
+      };
+    }
+    """
+
+    # Method-specific form variants (always POST, PATCH, PUT, DELETE)
+    form_method_variants = [
+      """
+      patch: function(#{fn_params}) {
+        return {
+          action: _buildFormAction("#{path}", #{params_obj}, "patch", options),
+          method: "post"
+        };
+      }
+      """,
+      """
+      put: function(#{fn_params}) {
+        return {
+          action: _buildFormAction("#{path}", #{params_obj}, "put", options),
+          method: "post"
+        };
+      }
+      """,
+      """
+      delete: function(#{fn_params}) {
+        return {
+          action: _buildFormAction("#{path}", #{params_obj}, "delete", options),
+          method: "post"
+        };
+      }
+      """
+    ]
+
+    # Combine into .form object
+    """
+    form: Object.assign(
+      #{indent(form_main, 2)},
+      {
+        #{Enum.map_join(form_method_variants, ",\n", &String.trim/1) |> indent(4)}
+      }
+    )
+    """
+    |> String.trim()
+  end
+
+  defp merge_variants(method_variants, form_variants) do
+    # Remove the closing brace from method_variants and add form_variants
+    method_variants
+    |> String.trim_trailing()
+    |> String.trim_trailing("}")
+    |> Kernel.<>(",\n  #{form_variants}\n}")
   end
 
   defp indent(text, spaces) do
