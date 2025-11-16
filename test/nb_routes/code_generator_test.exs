@@ -196,12 +196,12 @@ defmodule NbRoutes.CodeGeneratorTest do
       assert code =~ "patch: function(id, options)"
     end
 
-    test "exports _buildUrl in ESM mode" do
+    test "exports _buildUrl and visitRoute in ESM mode" do
       routes = []
       config = %Configuration{variant: :rich, module_type: :esm}
       code = CodeGenerator.generate(routes, config)
 
-      assert code =~ "export { _buildUrl };"
+      assert code =~ "export { _buildUrl, visitRoute };"
     end
 
     test "does not export _buildUrl in simple mode" do

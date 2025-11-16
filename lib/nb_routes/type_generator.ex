@@ -363,6 +363,62 @@ defmodule NbRoutes.TypeGenerator do
       params?: Record<string, RouteParameter>,
       options?: RouteOptions
     ): string;
+
+    /**
+     * Visit options for Inertia.js (subset of available options)
+     */
+    export interface InertiaVisitOptions {
+      /** The method to use for the request */
+      method?: 'get' | 'post' | 'put' | 'patch' | 'delete';
+      /** The data to send with the request */
+      data?: Record<string, any>;
+      /** Replace the current history state */
+      replace?: boolean;
+      /** Preserve the scroll position */
+      preserveScroll?: boolean | ((props: any) => boolean);
+      /** Preserve the component's local state */
+      preserveState?: boolean | ((props: any) => boolean);
+      /** Only fetch these props from the server */
+      only?: string[];
+      /** Additional headers to include */
+      headers?: Record<string, string>;
+      /** Error bag to use */
+      errorBag?: string | null;
+      /** Force a form data request */
+      forceFormData?: boolean;
+      /** Callbacks */
+      onBefore?: (visit: any) => void;
+      onStart?: (visit: any) => void;
+      onProgress?: (progress: any) => void;
+      onSuccess?: (page: any) => void;
+      onError?: (errors: any) => void;
+      onCancel?: () => void;
+      onFinish?: () => void;
+    }
+
+    /**
+     * Visit a route using Inertia.js router
+     *
+     * @param route - Route result from a rich mode helper (e.g., users_path())
+     * @param options - Inertia visit options (data, headers, preserveScroll, etc.)
+     * @returns Inertia visit promise
+     *
+     * @example
+     * import { users_path, visitRoute } from './routes';
+     *
+     * // Simple navigation
+     * visitRoute(users_path());
+     *
+     * // With additional options
+     * visitRoute(update_user_path.patch(user.id), {
+     *   data: formData,
+     *   preserveScroll: true
+     * });
+     */
+    export function visitRoute(
+      route: RouteResult,
+      options?: Omit<InertiaVisitOptions, 'method'>
+    ): Promise<any>;
     """
     |> String.trim()
   end

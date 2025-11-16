@@ -13,18 +13,28 @@ defmodule NbRoutes.CodeGenerator do
   def generate(routes, %Configuration{} = config) do
     runtime = load_runtime()
 
-    [
+    parts = [
       generate_header(config),
       "",
       generate_runtime(runtime, config),
       "",
       generate_builder(config),
       "",
-      generate_routes(routes, config),
-      "",
-      generate_exports(config)
+      generate_routes(routes, config)
     ]
-    |> Enum.join("\n")
+
+    # Add Inertia helpers for rich mode
+    parts =
+      if config.variant == :rich do
+        parts ++ ["", generate_inertia_helpers()]
+      else
+        parts
+      end
+
+    parts =
+      parts ++ ["", generate_exports(config)]
+
+    Enum.join(parts, "\n")
   end
 
   # Private functions
@@ -504,12 +514,64 @@ defmodule NbRoutes.CodeGenerator do
     |> Enum.join("\n")
   end
 
+  defp generate_inertia_helpers do
+    """
+    /**
+     * Inertia.js helper functions for rich mode routes
+     */
+
+    /**
+     * Visit a route using Inertia.js router
+     * @param {Object} route - Route result from a rich mode helper (e.g., users_path())
+     * @param {Object} options - Inertia visit options (data, headers, preserveScroll, etc.)
+     * @returns {Promise} Inertia visit promise
+     *
+     * @example
+     * import { router } from '@inertiajs/react';
+     * import { users_path, visitRoute } from './routes';
+     *
+     * // Instead of:
+     * const route = users_path();
+     * router.visit(route.url, { method: route.method });
+     *
+     * // You can use:
+     * visitRoute(users_path());
+     *
+     * // With additional options:
+     * visitRoute(update_user_path.patch(user.id), {
+     *   data: formData,
+     *   preserveScroll: true
+     * });
+     */
+    function visitRoute(route, options = {}) {
+      if (typeof window === 'undefined') {
+        throw new Error('visitRoute can only be called in the browser');
+      }
+
+      // Check if Inertia router is available
+      const inertia = window.Inertia;
+      if (!inertia || !inertia.visit) {
+        throw new Error(
+          'Inertia.js not found. Make sure @inertiajs/inertia is installed and loaded. ' +
+          'Visit https://inertiajs.com for setup instructions.'
+        );
+      }
+
+      // Merge route method with visit options
+      return inertia.visit(route.url, {
+        method: route.method,
+        ...options
+      });
+    }
+    """
+  end
+
   defp generate_exports(%Configuration{module_type: :esm, variant: :rich}) do
     """
     // Configuration functions
     export const configure = (options) => _builder.configure(options);
     export const config = () => _builder.getConfig();
-    export { _buildUrl };
+    export { _buildUrl, visitRoute };
     """
   end
 
@@ -527,6 +589,7 @@ defmodule NbRoutes.CodeGenerator do
     module.exports.configure = (options) => _builder.configure(options);
     module.exports.config = () => _builder.getConfig();
     module.exports._buildUrl = _buildUrl;
+    module.exports.visitRoute = visitRoute;
     """
   end
 
@@ -546,14 +609,15 @@ defmodule NbRoutes.CodeGenerator do
     const config = () => _builder.getConfig();
 
     if (typeof module !== 'undefined' && module.exports) {
-      module.exports = { configure, config, _buildUrl };
+      module.exports = { configure, config, _buildUrl, visitRoute };
     } else if (typeof define === 'function' && define.amd) {
-      define([], function() { return { configure, config, _buildUrl }; });
+      define([], function() { return { configure, config, _buildUrl, visitRoute }; });
     } else {
       this.Routes = this.Routes || {};
       this.Routes.configure = configure;
       this.Routes.config = config;
       this.Routes._buildUrl = _buildUrl;
+      this.Routes.visitRoute = visitRoute;
     }
     """
   end
@@ -585,6 +649,7 @@ defmodule NbRoutes.CodeGenerator do
     window.Routes.configure = (options) => _builder.configure(options);
     window.Routes.config = () => _builder.getConfig();
     window.Routes._buildUrl = _buildUrl;
+    window.Routes.visitRoute = visitRoute;
     """
   end
 
