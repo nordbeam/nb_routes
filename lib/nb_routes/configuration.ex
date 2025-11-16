@@ -15,6 +15,9 @@ defmodule NbRoutes.Configuration do
     * `:default_url_options` - Default URL options (host, port, scheme) for URL helpers. Defaults to `%{}`.
     * `:documentation` - Include JSDoc documentation comments. Defaults to `true`.
     * `:router` - Phoenix router module. If `nil`, will attempt to auto-detect. Defaults to `nil`.
+    * `:variant` - Route helper variant. One of `:simple` (returns URL strings) or `:rich` (returns `{ url, method }` objects). Defaults to `:simple`.
+    * `:with_methods` - Generate method variants (`.get`, `.post`, `.url`, etc). Only applies when `variant: :rich`. Defaults to `true`.
+    * `:with_forms` - Generate form helpers (`.form`, `.form.put`, etc). Requires nb_inertia integration. Defaults to `false`.
 
   ## Examples
 
@@ -28,6 +31,7 @@ defmodule NbRoutes.Configuration do
   """
 
   @type module_type :: :esm | :cjs | :umd | nil
+  @type variant :: :simple | :rich
   @type t :: %__MODULE__{
           module_type: module_type(),
           output_file: String.t(),
@@ -39,7 +43,10 @@ defmodule NbRoutes.Configuration do
           compact: boolean(),
           default_url_options: map(),
           documentation: boolean(),
-          router: module() | nil
+          router: module() | nil,
+          variant: variant(),
+          with_methods: boolean(),
+          with_forms: boolean()
         }
 
   @enforce_keys []
@@ -53,7 +60,10 @@ defmodule NbRoutes.Configuration do
             compact: false,
             default_url_options: %{},
             documentation: true,
-            router: nil
+            router: nil,
+            variant: :simple,
+            with_methods: true,
+            with_forms: false
 
   @doc """
   Creates a new configuration with the given options.
@@ -121,6 +131,10 @@ defmodule NbRoutes.Configuration do
   def validate(%__MODULE__{module_type: type})
       when type not in [:esm, :cjs, :umd, nil] do
     {:error, "Invalid module_type: #{inspect(type)}. Must be one of :esm, :cjs, :umd, or nil"}
+  end
+
+  def validate(%__MODULE__{variant: variant}) when variant not in [:simple, :rich] do
+    {:error, "Invalid variant: #{inspect(variant)}. Must be :simple or :rich"}
   end
 
   def validate(%__MODULE__{include: include}) when not is_list(include) do

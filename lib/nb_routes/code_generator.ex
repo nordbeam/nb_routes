@@ -9,13 +9,6 @@ defmodule NbRoutes.CodeGenerator do
 
   @doc """
   Generates JavaScript code for the given routes.
-
-  ## Examples
-
-      iex> routes = [%NbRoutes.Route{name: "user_path", ...}]
-      iex> NbRoutes.CodeGenerator.generate(routes, %NbRoutes.Configuration{})
-      "export const user_path = ..."
-
   """
   def generate(routes, %Configuration{} = config) do
     runtime = load_runtime()
@@ -68,16 +61,83 @@ defmodule NbRoutes.CodeGenerator do
   end
 
   defp generate_runtime(runtime, config) do
-    case config.module_type do
-      :esm ->
-        # For ESM, we inline the RouteBuilder class without module exports
-        runtime
-        |> String.replace(~r/\/\/ Export for different module systems.*$/s, "")
-        |> String.trim()
+    base_runtime =
+      case config.module_type do
+        :esm ->
+          # For ESM, we inline the RouteBuilder class without module exports
+          runtime
+          |> String.replace(~r/\/\/ Export for different module systems.*$/s, "")
+          |> String.trim()
 
-      _ ->
-        runtime
+        _ ->
+          runtime
+      end
+
+    # Add _buildUrl helper for rich mode
+    if config.variant == :rich do
+      base_runtime <> "\n\n" <> generate_build_url_helper()
+    else
+      base_runtime
     end
+  end
+
+  defp generate_build_url_helper do
+    """
+    /**
+     * Build URL from pattern and params (for rich mode)
+     * @param {string} pattern - URL pattern with :param placeholders (e.g., "/users/:id")
+     * @param {Object} params - Parameter values (e.g., { id: 1 })
+     * @param {Object} options - URL options (query, mergeQuery, anchor)
+     * @returns {string} Built URL
+     */
+    function _buildUrl(pattern, params = {}, options = {}) {
+      let url = pattern;
+
+      // Replace :param placeholders
+      Object.keys(params).forEach(key => {
+        const value = params[key];
+        if (value !== undefined && value !== null) {
+          url = url.replace(new RegExp(':' + key + '(\\\\W|$)', 'g'), encodeURIComponent(String(value)) + '$1');
+        }
+      });
+
+      // Handle query parameters
+      const queryParams = [];
+
+      if (options.query) {
+        Object.keys(options.query).forEach(key => {
+          const value = options.query[key];
+          if (value !== undefined && value !== null) {
+            queryParams.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(value)));
+          }
+        });
+      }
+
+      if (options.mergeQuery) {
+        Object.keys(options.mergeQuery).forEach(key => {
+          const value = options.mergeQuery[key];
+          if (value !== undefined && value !== null) {
+            queryParams.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(value)));
+          } else if (value === null) {
+            // null explicitly removes the param (useful for overriding)
+            // Skip it
+          }
+        });
+      }
+
+      if (queryParams.length > 0) {
+        url += (url.includes('?') ? '&' : '?') + queryParams.join('&');
+      }
+
+      // Handle anchor
+      if (options.anchor) {
+        url += '#' + encodeURIComponent(options.anchor);
+      }
+
+      return url;
+    }
+    """
+    |> String.trim()
   end
 
   defp generate_builder(config) do
@@ -104,7 +164,7 @@ defmodule NbRoutes.CodeGenerator do
 
     [
       generate_route_doc(route, config),
-      generate_route_helper(route, params, spec, false)
+      generate_route_helper(route, params, spec, false, config)
     ]
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n")
@@ -166,7 +226,17 @@ defmodule NbRoutes.CodeGenerator do
     |> String.replace(~r/\([^)]*\)/, "")
   end
 
-  defp generate_route_helper(route, params, spec, absolute) do
+  defp generate_route_helper(route, params, spec, absolute, config) do
+    case config.variant do
+      :simple ->
+        generate_simple_route_helper(route, params, spec, absolute)
+
+      :rich ->
+        generate_rich_route_helper(route, params, spec, absolute, config)
+    end
+  end
+
+  defp generate_simple_route_helper(route, params, spec, absolute) do
     params_js = inspect_js_object(params)
     spec_js = inspect_js(spec)
 
@@ -183,6 +253,135 @@ defmodule NbRoutes.CodeGenerator do
     end
   end
 
+  defp generate_rich_route_helper(route, _params, _spec, _absolute, config) do
+    # Extract parameter names for function signature
+    params_list = Enum.join(route.required_params, ", ")
+
+    # Build JavaScript params object: { id, name }
+    params_obj = build_params_object(route.required_params)
+
+    # Get the HTTP method as lowercase string
+    method = route.verb |> to_string() |> String.downcase()
+
+    # Generate the main function
+    main_fn = generate_route_function(route.name, params_list, route.path, params_obj, method)
+
+    # Generate method variants if enabled
+    variants =
+      if config.with_methods do
+        generate_method_variants(route.name, params_list, route.path, params_obj, method)
+      else
+        "{}"
+      end
+
+    """
+    const #{route.name} = Object.assign(
+      #{indent(main_fn, 2)},
+      #{indent(variants, 2)}
+    );
+    """
+    |> String.trim()
+  end
+
+  defp build_params_object([]), do: "{}"
+
+  defp build_params_object(params) do
+    param_pairs = Enum.map_join(params, ", ", fn p -> p end)
+    "{ #{param_pairs} }"
+  end
+
+  defp generate_route_function(_route_name, params_list, path, params_obj, method) do
+    fn_params = if params_list == "", do: "options", else: "#{params_list}, options"
+
+    """
+    function(#{fn_params}) {
+      return {
+        url: _buildUrl("#{path}", #{params_obj}, options),
+        method: "#{method}"
+      };
+    }
+    """
+    |> String.trim()
+  end
+
+  defp generate_method_variants(_route_name, params_list, path, params_obj, original_method) do
+    fn_params = if params_list == "", do: "options", else: "#{params_list}, options"
+
+    # Generate .get, .post, .head, .url variants
+    variants = [
+      # .get variant
+      """
+      get: function(#{fn_params}) {
+        return {
+          url: _buildUrl("#{path}", #{params_obj}, options),
+          method: "get"
+        };
+      }
+      """,
+      # .head variant
+      """
+      head: function(#{fn_params}) {
+        return {
+          url: _buildUrl("#{path}", #{params_obj}, options),
+          method: "head"
+        };
+      }
+      """,
+      # .url variant (returns just the URL string)
+      """
+      url: function(#{fn_params}) {
+        return _buildUrl("#{path}", #{params_obj}, options);
+      }
+      """
+    ]
+
+    # Add method-specific variant if not already covered
+    method_variant =
+      case original_method do
+        m when m in ["get", "head"] ->
+          nil
+
+        m ->
+          """
+          #{m}: function(#{fn_params}) {
+            return {
+              url: _buildUrl("#{path}", #{params_obj}, options),
+              method: "#{m}"
+            };
+          }
+          """
+      end
+
+    all_variants = if method_variant, do: [method_variant | variants], else: variants
+
+    """
+    {
+      #{Enum.map_join(all_variants, ",\n", &String.trim/1) |> indent(2)}
+    }
+    """
+    |> String.trim()
+  end
+
+  defp indent(text, spaces) do
+    padding = String.duplicate(" ", spaces)
+
+    text
+    |> String.split("\n")
+    |> Enum.map(fn line ->
+      if String.trim(line) == "", do: line, else: padding <> line
+    end)
+    |> Enum.join("\n")
+  end
+
+  defp generate_exports(%Configuration{module_type: :esm, variant: :rich}) do
+    """
+    // Configuration functions
+    export const configure = (options) => _builder.configure(options);
+    export const config = () => _builder.getConfig();
+    export { _buildUrl };
+    """
+  end
+
   defp generate_exports(%Configuration{module_type: :esm}) do
     """
     // Configuration functions
@@ -191,11 +390,40 @@ defmodule NbRoutes.CodeGenerator do
     """
   end
 
+  defp generate_exports(%Configuration{module_type: :cjs, variant: :rich}) do
+    """
+    // Configuration functions
+    module.exports.configure = (options) => _builder.configure(options);
+    module.exports.config = () => _builder.getConfig();
+    module.exports._buildUrl = _buildUrl;
+    """
+  end
+
   defp generate_exports(%Configuration{module_type: :cjs}) do
     """
     // Configuration functions
     module.exports.configure = (options) => _builder.configure(options);
     module.exports.config = () => _builder.getConfig();
+    """
+  end
+
+  defp generate_exports(%Configuration{module_type: :umd, variant: :rich}) do
+    # UMD exports both CommonJS and AMD style
+    """
+    // Configuration functions
+    const configure = (options) => _builder.configure(options);
+    const config = () => _builder.getConfig();
+
+    if (typeof module !== 'undefined' && module.exports) {
+      module.exports = { configure, config, _buildUrl };
+    } else if (typeof define === 'function' && define.amd) {
+      define([], function() { return { configure, config, _buildUrl }; });
+    } else {
+      this.Routes = this.Routes || {};
+      this.Routes.configure = configure;
+      this.Routes.config = config;
+      this.Routes._buildUrl = _buildUrl;
+    }
     """
   end
 
@@ -215,6 +443,17 @@ defmodule NbRoutes.CodeGenerator do
       this.Routes.configure = configure;
       this.Routes.config = config;
     }
+    """
+  end
+
+  defp generate_exports(%Configuration{module_type: nil, variant: :rich}) do
+    # Global namespace
+    """
+    // Configuration functions
+    window.Routes = window.Routes || {};
+    window.Routes.configure = (options) => _builder.configure(options);
+    window.Routes.config = () => _builder.getConfig();
+    window.Routes._buildUrl = _buildUrl;
     """
   end
 

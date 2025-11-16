@@ -19,11 +19,11 @@ defmodule NbRoutes.TypeGenerator do
     [
       generate_header(),
       "",
-      generate_types(),
+      generate_types(config),
       "",
       generate_route_types(routes, config),
       "",
-      generate_config_types()
+      generate_config_types(config)
     ]
     |> Enum.join("\n")
   end
@@ -42,7 +42,73 @@ defmodule NbRoutes.TypeGenerator do
     |> String.trim()
   end
 
-  defp generate_types do
+  defp generate_types(%Configuration{variant: :rich}) do
+    """
+    /**
+     * Valid route parameter types
+     */
+    export type RouteParameter = string | number | boolean;
+
+    /**
+     * Result returned by rich route helpers
+     */
+    export interface RouteResult {
+      /** Generated URL */
+      url: string;
+      /** HTTP method */
+      method: 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head' | 'options';
+    }
+
+    /**
+     * Options that can be passed to route helpers
+     */
+    export interface RouteOptions {
+      /** URL anchor (hash) */
+      anchor?: string;
+      /** Query string parameters to append */
+      query?: Record<string, RouteParameter>;
+      /** Query string parameters to merge with existing query */
+      mergeQuery?: Record<string, RouteParameter | null | undefined>;
+    }
+
+    /**
+     * Default URL options for absolute URLs
+     */
+    export interface DefaultUrlOptions {
+      /** URL scheme (http, https) */
+      scheme?: string;
+      /** Host name */
+      host?: string;
+      /** Port number */
+      port?: number;
+    }
+
+    /**
+     * Configuration options for route generation
+     */
+    export interface RouteConfig {
+      defaultUrlOptions?: DefaultUrlOptions;
+      trailingSlash?: boolean;
+    }
+
+    /**
+     * Route helper function with method variants
+     */
+    export interface RouteHelper<TParams extends any[] = any[]> {
+      /** Main helper - returns RouteResult with url and method */
+      (...args: TParams): RouteResult;
+      /** GET method variant */
+      get(...args: TParams): RouteResult;
+      /** HEAD method variant */
+      head(...args: TParams): RouteResult;
+      /** URL-only variant - returns just the URL string */
+      url(...args: TParams): string;
+    }
+    """
+    |> String.trim()
+  end
+
+  defp generate_types(%Configuration{variant: :simple}) do
     """
     /**
      * Valid route parameter types
@@ -142,7 +208,52 @@ defmodule NbRoutes.TypeGenerator do
     "#{route.name}(#{Enum.join(example_values, ", ")})"
   end
 
-  defp generate_config_types do
+  defp generate_config_types(%Configuration{variant: :rich}) do
+    """
+    /**
+     * Configure route generation options
+     *
+     * @param options - Configuration options
+     *
+     * @example
+     * configure({
+     *   defaultUrlOptions: {
+     *     scheme: 'https',
+     *     host: 'example.com'
+     *   }
+     * });
+     */
+    export function configure(options: RouteConfig): void;
+
+    /**
+     * Get current configuration
+     *
+     * @returns Current route configuration
+     */
+    export function config(): RouteConfig;
+
+    /**
+     * Build URL from pattern and params (low-level helper)
+     *
+     * @param pattern - URL pattern with :param placeholders (e.g., "/users/:id")
+     * @param params - Parameter values (e.g., { id: 1 })
+     * @param options - URL options (query, mergeQuery, anchor)
+     * @returns Built URL string
+     *
+     * @example
+     * _buildUrl("/users/:id", { id: 123 }, { query: { filter: "active" } })
+     * // => "/users/123?filter=active"
+     */
+    export function _buildUrl(
+      pattern: string,
+      params?: Record<string, RouteParameter>,
+      options?: RouteOptions
+    ): string;
+    """
+    |> String.trim()
+  end
+
+  defp generate_config_types(%Configuration{variant: :simple}) do
     """
     /**
      * Configure route generation options
