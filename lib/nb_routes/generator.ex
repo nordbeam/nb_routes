@@ -24,11 +24,32 @@ defmodule NbRoutes.Generator do
   def extract_routes(router, opts \\ []) when is_atom(router) do
     config = Configuration.new(opts)
 
-    router.__routes__()
-    |> Enum.filter(&has_helper?/1)
-    |> Enum.filter(&filter_route(&1, config))
-    |> Enum.map(&Route.from_phoenix_route(&1, opts))
-    |> Enum.uniq_by(& &1.name)
+    # Convert routes and keep track of original phoenix routes
+    routes_with_metadata =
+      router.__routes__()
+      |> Enum.filter(&has_helper?/1)
+      |> Enum.filter(&filter_route(&1, config))
+      |> Enum.map(fn phoenix_route ->
+        route = Route.from_phoenix_route(phoenix_route, opts)
+        {route, get_action(phoenix_route)}
+      end)
+
+    # Handle duplicate helper names by appending action name
+    routes_with_metadata
+    |> Enum.group_by(fn {route, _action} -> route.name end)
+    |> Enum.flat_map(fn
+      {_name, [{single_route, _action}]} ->
+        # Only one route with this name, keep as is
+        [single_route]
+
+      {_name, multiple_routes} ->
+        # Multiple routes with same helper name, append action to make unique
+        Enum.map(multiple_routes, fn {route, action} ->
+          # Remove _path suffix, append action, then add _path back
+          base_name = String.replace_suffix(route.name, "_path", "")
+          %{route | name: "#{base_name}_#{action}_path"}
+        end)
+    end)
   end
 
   @doc """
@@ -58,6 +79,10 @@ defmodule NbRoutes.Generator do
   end
 
   # Private functions
+
+  # Extract action from route
+  defp get_action(%Phoenix.Router.Route{plug_opts: action}), do: action
+  defp get_action(%{plug_opts: action}), do: action
 
   # Check if the route has a helper name (some routes like forward/4 don't)
   defp has_helper?(%Phoenix.Router.Route{helper: nil}), do: false
