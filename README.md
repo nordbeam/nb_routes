@@ -5,11 +5,13 @@ Generate JavaScript/TypeScript route helpers from Phoenix routes. A port of [js-
 ## Features
 
 - **Type-safe route generation** - Generate paths with compile-time validation
+- **Rich Mode** - Return `{ url, method }` objects with method variants (`.get`, `.post`, `.url`)
+- **Form Helpers** - Automatic method spoofing for HTML forms (`.form`, `.form.patch`, etc.)
 - **TypeScript support** - Auto-generate `.d.ts` files with full type information
 - **Multiple module formats** - ESM, CommonJS, UMD, or global namespace
 - **Flexible configuration** - Include/exclude routes, camelCase naming, URL helpers
 - **Integration ready** - Works seamlessly with `nb_vite`, `nb_inertia`, and `nb_ts`
-- **Development watcher** - Auto-regenerate routes when router changes
+- **Development watcher** - Auto-regenerate routes when router changes (via nb_vite plugin)
 
 ## Installation
 
@@ -76,19 +78,217 @@ user_path(123, {
 });
 ```
 
+## Rich Mode
+
+Rich mode is an advanced feature that generates route helpers with enhanced capabilities including method variants and form helpers.
+
+### Basic Rich Mode
+
+Enable rich mode in your configuration:
+
+```elixir
+config :nb_routes,
+  variant: :rich,          # Enable rich mode
+  with_methods: true,      # Enable method variants (.get, .post, .url, etc.)
+  with_forms: false        # Enable form helpers (requires nb_inertia)
+```
+
+Rich mode route helpers return objects instead of strings:
+
+```javascript
+import { user_path, update_user_path } from './routes';
+
+// Instead of returning "/users/1"
+// Returns { url: "/users/1", method: "get" }
+const route = user_path(1);
+
+console.log(route.url);     // => "/users/1"
+console.log(route.method);  // => "get"
+```
+
+### Method Variants
+
+With `with_methods: true`, each route gets additional method variants:
+
+```javascript
+import { user_path } from './routes';
+
+// Main function - uses the route's defined HTTP method
+user_path(1);              // => { url: "/users/1", method: "get" }
+
+// Method variants
+user_path.get(1);          // => { url: "/users/1", method: "get" }
+user_path.head(1);         // => { url: "/users/1", method: "head" }
+user_path.url(1);          // => "/users/1" (returns just the URL string)
+
+// For mutation routes (POST, PATCH, PUT, DELETE)
+update_user_path(1);           // => { url: "/users/1", method: "patch" }
+update_user_path.patch(1);     // => { url: "/users/1", method: "patch" }
+update_user_path.put(1);       // => { url: "/users/1", method: "put" }
+delete_user_path(1);           // => { url: "/users/1", method: "delete" }
+delete_user_path.delete(1);    // => { url: "/users/1", method: "delete" }
+```
+
+### Query Parameters and Options
+
+Rich mode supports the same query parameter API:
+
+```javascript
+user_path(1, {
+  query: { filter: 'active', sort: 'name' },  // Append query params
+  anchor: 'profile'                            // Add hash anchor
+});
+// => { url: "/users/1?filter=active&sort=name#profile", method: "get" }
+
+// mergeQuery allows null to remove params (useful for overriding)
+user_path(1, {
+  mergeQuery: { tab: 'settings', page: null }
+});
+```
+
+### Form Helpers
+
+Enable form helpers for seamless HTML form integration:
+
+```elixir
+config :nb_routes,
+  variant: :rich,
+  with_methods: true,
+  with_forms: true    # Enable form helpers
+```
+
+Form helpers handle method spoofing automatically for HTML forms:
+
+```javascript
+import { update_user_path, delete_user_path } from './routes';
+
+// HTML forms only support GET and POST
+// Form helpers automatically add _method parameter for other verbs
+
+// PATCH form
+update_user_path.form(1);
+// => { action: "/users/1?_method=PATCH", method: "post" }
+
+// Specific method variants
+update_user_path.form.patch(1);
+// => { action: "/users/1?_method=PATCH", method: "post" }
+
+update_user_path.form.put(1);
+// => { action: "/users/1?_method=PUT", method: "post" }
+
+delete_user_path.form.delete(1);
+// => { action: "/users/1?_method=DELETE", method: "post" }
+```
+
+**React Example:**
+
+```jsx
+import { update_user_path } from './routes';
+
+function EditUserForm({ user }) {
+  const formAction = update_user_path.form.patch(user.id);
+
+  return (
+    <form action={formAction.action} method={formAction.method}>
+      <input type="text" name="user[name]" defaultValue={user.name} />
+      <button type="submit">Update</button>
+    </form>
+  );
+}
+```
+
+**Inertia.js Example:**
+
+```jsx
+import { router } from '@inertiajs/react';
+import { update_user_path } from './routes';
+
+function EditUserForm({ user }) {
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const route = update_user_path.patch(user.id);
+
+    router.visit(route.url, {
+      method: route.method,
+      data: Object.fromEntries(formData)
+    });
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="text" name="name" defaultValue={user.name} />
+      <button type="submit">Update</button>
+    </form>
+  );
+}
+```
+
+### TypeScript Support for Rich Mode
+
+Rich mode includes full TypeScript support with specialized interfaces:
+
+```typescript
+import { user_path, update_user_path } from './routes';
+import type { RouteResult, RouteOptions, FormAttributes } from './routes';
+
+// RouteResult interface
+const route: RouteResult = user_path(123);
+route.url;      // string
+route.method;   // 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head' | 'options'
+
+// RouteOptions interface
+const options: RouteOptions = {
+  query: { filter: 'active' },         // Query parameters
+  mergeQuery: { page: null },          // Merge/remove query params
+  anchor: 'section'                    // Hash anchor
+};
+
+// FormAttributes interface (when with_forms is enabled)
+const formProps: FormAttributes = update_user_path.form.patch(123);
+formProps.action;   // string (URL with _method param)
+formProps.method;   // 'get' | 'post'
+```
+
+### When to Use Rich Mode
+
+**Use Rich Mode when:**
+- Building SPAs with Inertia.js or similar frameworks
+- Need to know the HTTP method along with the URL
+- Working with HTML forms that require method spoofing
+- Want method variants for flexibility (.get, .post, .url)
+
+**Use Simple Mode when:**
+- You only need URL strings
+- Building traditional server-rendered apps
+- Optimizing for minimal JavaScript bundle size
+- Don't need method information in the frontend
+
 ## Configuration
 
 Configure in `config/config.exs`:
 
 ```elixir
 config :nb_routes,
+  # Basic options
   module_type: :esm,                    # :esm | :cjs | :umd | nil
   output_file: "assets/js/routes.js",
   router: MyAppWeb.Router,              # Optional - auto-detected if not set
+
+  # Route filtering
   include: [~r/^api_/],                 # Only include API routes
   exclude: [~r/^admin_/],               # Exclude admin routes
+
+  # Naming
   camel_case: false,                    # Convert to camelCase
   compact: false,                       # Remove _path suffix
+
+  # Rich mode options
+  variant: :rich,                       # :simple (default) | :rich
+  with_methods: true,                   # Enable method variants (.get, .post, etc.)
+  with_forms: false,                    # Enable form helpers (.form, .form.patch, etc.)
+
+  # Other options
   url_helpers: false,                   # Generate *_url helpers
   documentation: true                   # JSDoc comments
 ```
@@ -112,6 +312,15 @@ mix nb_routes.gen --exclude "^admin_"
 
 # Generate as CommonJS
 mix nb_routes.gen --module-type cjs
+
+# Enable rich mode
+mix nb_routes.gen --variant rich
+
+# Enable method variants (requires rich mode)
+mix nb_routes.gen --variant rich --with-methods
+
+# Enable form helpers (requires rich mode)
+mix nb_routes.gen --variant rich --with-methods --with-forms
 
 # Use camelCase names
 mix nb_routes.gen --camel-case
@@ -208,11 +417,45 @@ const currentConfig = config();
 
 ### Integration with nb_vite
 
-For automatic route regeneration during development, add to `config/dev.exs`:
+For automatic route regeneration during development, add the `nbRoutes` plugin to your Vite config:
 
-```elixir
-config :nb_routes,
-  watch: true  # Auto-regenerate on router changes
+```typescript
+// assets/vite.config.ts
+import { defineConfig } from 'vite';
+import phoenix from '@nordbeam/nb-vite';
+import { nbRoutes } from '@nordbeam/nb-vite/nb-routes';
+
+export default defineConfig({
+  plugins: [
+    phoenix({
+      input: ['js/app.ts'],
+    }),
+    nbRoutes({
+      enabled: true,       // Enable the plugin
+      verbose: false,      // Enable verbose logging
+      debounce: 300        // Debounce delay in ms
+    })
+  ],
+});
+```
+
+The plugin will:
+- Watch your Phoenix router files for changes
+- Automatically regenerate routes when router.ex changes
+- Trigger HMR to reload the routes module in your browser
+- Debounce rapid changes to avoid excessive regeneration
+
+**Configuration Options:**
+
+```typescript
+nbRoutes({
+  enabled: true,                              // Enable/disable the plugin
+  routerPath: ['lib/**/*_web/router.ex'],    // Router file patterns to watch
+  routesFile: 'assets/js/routes.js',         // Path to generated routes file
+  command: 'mix nb_routes.gen',              // Command to run for generation
+  debounce: 300,                             // Debounce delay in milliseconds
+  verbose: false                             // Enable verbose logging
+})
 ```
 
 ### Integration with nb_inertia

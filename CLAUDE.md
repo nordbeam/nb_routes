@@ -19,7 +19,7 @@ Developer guidance for Claude Code when working with the nb_routes package.
 
 2. **NbRoutes.Configuration** (`lib/nb_routes/configuration.ex`)
    - Configuration struct with validation
-   - Options: module_type, output_file, include/exclude patterns, camel_case, etc.
+   - Options: module_type, output_file, include/exclude patterns, camel_case, variant (simple/rich), with_methods, with_forms, etc.
 
 3. **NbRoutes.Route** (`lib/nb_routes/route.ex`)
    - Represents a single Phoenix route
@@ -94,13 +94,130 @@ Routes are serialized into a compact tree structure:
 }
 ```
 
+## Rich Mode Implementation
+
+### Overview
+
+Rich mode is an advanced route generation variant that returns objects instead of strings:
+
+```javascript
+// Simple mode
+user_path(1)  // => "/users/1"
+
+// Rich mode
+user_path(1)  // => { url: "/users/1", method: "get" }
+```
+
+### Architecture
+
+**Configuration Options (Configuration.ex):**
+- `variant`: `:simple` | `:rich` - Controls helper output format
+- `with_methods`: `boolean` - Enables method variants (`.get`, `.post`, etc.)
+- `with_forms`: `boolean` - Enables form helpers (`.form`, `.form.patch`, etc.)
+
+**Code Generation Flow:**
+
+1. **Mode Detection** (`CodeGenerator.generate_route_helper/5` - line 279-286)
+   - Checks `config.variant`
+   - Branches to either `generate_simple_route_helper/4` or `generate_rich_route_helper/5`
+
+2. **Rich Helper Generation** (`generate_rich_route_helper/5` - line 306-350)
+   - Generates main function returning `{ url, method }`
+   - Uses `Object.assign` pattern to add variants as properties
+   - Calls `_buildUrl` helper for URL construction
+
+3. **Method Variants** (`generate_method_variants/5` - line 373-429)
+   - Generated when `with_methods: true`
+   - Creates `.get`, `.head`, `.url` variants for all routes
+   - Adds method-specific variant for the route's HTTP verb (`.post`, `.patch`, `.put`, `.delete`)
+
+4. **Form Helpers** (`generate_form_variants/4` - line 435-486)
+   - Generated when `with_forms: true` and route is a mutation (POST/PATCH/PUT/DELETE)
+   - Creates `.form` property with nested structure
+   - Uses `_buildFormAction` for method spoofing
+
+### Helper Functions
+
+**`_buildUrl` (lines 92-149):**
+- Replaces `:param` placeholders in URL pattern
+- Handles `query` and `mergeQuery` options
+- Adds anchor hash if provided
+- Exported in rich mode for direct use
+
+**`_buildFormAction` (lines 151-190):**
+- Wraps `_buildUrl` for form-specific logic
+- Adds `_method` query parameter for non-GET/POST methods (method spoofing)
+- Returns URL suitable for HTML form action attributes
+
+### TypeScript Type Generation
+
+**Rich Mode Interfaces** (`TypeGenerator.generate_types/1` - lines 45-144):
+
+1. **RouteResult** (lines 54-60)
+   ```typescript
+   interface RouteResult {
+     url: string;
+     method: 'get' | 'post' | 'patch' | 'put' | 'delete' | 'head' | 'options';
+   }
+   ```
+
+2. **RouteOptions** (lines 74-82 for rich, 166-173 for rich)
+   ```typescript
+   interface RouteOptions {
+     anchor?: string;
+     query?: Record<string, RouteParameter>;
+     mergeQuery?: Record<string, RouteParameter | null | undefined>;
+   }
+   ```
+
+3. **FormAttributes** (lines 63-70)
+   ```typescript
+   interface FormAttributes {
+     action: string;  // URL with _method param
+     method: 'get' | 'post';
+   }
+   ```
+
+4. **RouteHelper / RouteHelperWithForm** (lines 107-141)
+   - Different interfaces based on `with_forms` config
+   - RouteHelperWithForm includes `.form` property
+   - Applied per-route based on HTTP method (only mutation routes get form helpers)
+
+### Export Strategy
+
+Rich mode exports additional helpers (`generate_exports/1` - lines 507-599):
+
+**ESM exports (lines 507-513):**
+```javascript
+export const configure = (options) => _builder.configure(options);
+export const config = () => _builder.getConfig();
+export { _buildUrl };  // Only in rich mode
+```
+
+**CommonJS exports (lines 524-530):**
+```javascript
+module.exports._buildUrl = _buildUrl;  // Only in rich mode
+```
+
+### Testing
+
+Rich mode tests in `test/nb_routes/code_generator_test.exs`:
+
+1. **Basic rich mode** (lines 49-69): Object.assign pattern
+2. **Method variants** (lines 92-114): .get, .head, .url variants
+3. **Form helpers** (lines 237-305): .form, .form.patch, .form.put, .form.delete
+4. **_buildUrl export** (lines 199-205): Exported in ESM
+5. **_buildFormAction helper** (lines 306-326): Method spoofing logic
+
 ## Key Design Decisions
 
 1. **Optional Dependencies**: None - nb_routes is standalone
-2. **Conditional Compilation**: Not used (no optional features)
+2. **Dual Mode System**: Supports both simple mode (URL strings) and rich mode (objects with method info)
 3. **Module Formats**: Supports ESM, CJS, UMD, and global namespace
 4. **Code Generation**: Compile-time generation via Mix task
 5. **Route Introspection**: Uses `Phoenix.Router.__routes__()`
+6. **Method Variants**: Rich mode provides `.get`, `.post`, `.url` variants for flexibility
+7. **Form Integration**: Optional form helpers with automatic method spoofing for HTML forms
 
 ## Common Development Tasks
 
@@ -216,13 +333,55 @@ nb_routes has no dependencies on other nb_* packages. It works independently.
 
 ### With nb_vite
 
-Routes can be auto-regenerated when router changes (planned feature):
+**Integration Status**: ✅ Fully integrated
 
-```elixir
-# config/dev.exs
-config :nb_routes,
-  watch: true  # Watch router.ex for changes
+Routes are auto-regenerated when router changes using the `vite-plugin-nb-routes` Vite plugin.
+
+#### Implementation
+
+**Plugin Location**: `nb_vite/priv/nb_vite/src/vite-plugin-nb-routes.ts`
+
+**Features:**
+1. **File Watching**: Uses Vite's built-in watcher to detect router.ex changes
+2. **Auto-regeneration**: Spawns `mix nb_routes.gen` when changes detected
+3. **HMR Integration**: Invalidates routes module and triggers hot reload
+4. **Debouncing**: Prevents excessive regeneration during rapid changes (default: 300ms)
+5. **Configurable**: Supports custom router paths, commands, and options
+
+**Usage** (`assets/vite.config.ts`):
+```typescript
+import { defineConfig } from 'vite';
+import phoenix from '@nordbeam/nb-vite';
+import { nbRoutes } from '@nordbeam/nb-vite/nb-routes';
+
+export default defineConfig({
+  plugins: [
+    phoenix({ input: ['js/app.ts'] }),
+    nbRoutes({
+      enabled: true,
+      routerPath: ['lib/**/*_web/router.ex'],
+      routesFile: 'assets/js/routes.js',
+      command: 'mix nb_routes.gen',
+      debounce: 300,
+      verbose: false
+    })
+  ]
+});
 ```
+
+**How it works:**
+1. Plugin registers with Vite's `configureServer` hook
+2. Listens to Vite's file watcher for changes
+3. Matches changed files against router patterns
+4. Triggers debounced regeneration
+5. Invalidates routes module in Vite's module graph
+6. Sends HMR update to browser
+
+**Key Functions** (in vite-plugin-nb-routes.ts):
+- `regenerateRoutes()` (lines 87-128): Spawns mix command
+- `debouncedRegenerate()` (lines 133-142): Debounces regeneration
+- `invalidateRoutesModule()` (lines 147-180): HMR invalidation
+- `matchesRouterPattern()` (lines 185-197): Pattern matching
 
 ### With nb_inertia
 
