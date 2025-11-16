@@ -155,7 +155,11 @@ defmodule NbRoutes.CodeGenerator do
     route.path
     |> String.replace(~r/:(\w+)/, fn _, param ->
       index = Enum.find_index(route.required_params, &(&1 == param))
-      if index, do: Enum.at(values, index, "1"), else: "1"
+
+      case index do
+        nil -> "1"
+        idx -> Enum.at(values, idx, "1") || "1"
+      end
     end)
     |> String.replace(~r/\([^)]*\)/, "")
   end
