@@ -52,7 +52,7 @@ defmodule NbRoutes.Generator do
           end)
       end)
 
-    # Final pass: ensure all names are unique by appending index if needed
+    # Final pass: ensure all names are unique by extracting scope from path
     routes
     |> Enum.group_by(& &1.name)
     |> Enum.flat_map(fn
@@ -60,13 +60,40 @@ defmodule NbRoutes.Generator do
         [single_route]
 
       {_name, duplicate_routes} ->
-        # Still have duplicates after appending action, append index
-        duplicate_routes
-        |> Enum.with_index(1)
-        |> Enum.map(fn {route, index} ->
+        # Still have duplicates after appending action
+        # Extract first path segment as scope prefix
+        Enum.map(duplicate_routes, fn route ->
+          scope = extract_scope_from_path(route.path)
           base_name = String.replace_suffix(route.name, "_path", "")
-          %{route | name: "#{base_name}_#{index}_path"}
+
+          new_name =
+            if scope do
+              "#{scope}_#{base_name}_path"
+            else
+              # No scope found, this is a real conflict - warn and keep last
+              IO.warn("""
+              Duplicate route helper detected: #{route.name}
+              Path: #{route.path}
+
+              Consider adding a unique `as:` option to this route in your router.
+              """)
+
+              route.name
+            end
+
+          %{route | name: new_name}
         end)
+        |> Enum.uniq_by(& &1.name)
+    end)
+  end
+
+  # Extract first literal path segment as scope (e.g., /api/users/:id -> "api")
+  defp extract_scope_from_path(path) do
+    path
+    |> String.split("/", trim: true)
+    |> Enum.find(fn segment ->
+      # Find first segment that's not a parameter or glob
+      not String.starts_with?(segment, ":") and not String.starts_with?(segment, "*")
     end)
   end
 

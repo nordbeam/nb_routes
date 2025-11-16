@@ -123,18 +123,17 @@ defmodule NbRoutes.GeneratorTest do
       end
     end
 
-    test "handles same helper + same action by appending index" do
+    test "handles same helper + same action by extracting scope from path" do
       routes = Generator.extract_routes(TestRouterWithConflicts)
 
-      # Should have user_show_1_path and user_show_2_path
-      user_show_1 = Enum.find(routes, &(&1.name == "user_show_1_path"))
-      user_show_2 = Enum.find(routes, &(&1.name == "user_show_2_path"))
+      # Should have api_user_show_path and admin_user_show_path
+      api_route = Enum.find(routes, &(&1.name == "api_user_show_path"))
+      admin_route = Enum.find(routes, &(&1.name == "admin_user_show_path"))
 
-      assert user_show_1
-      assert user_show_2
-      assert user_show_1.path in ["/api/users/:id", "/admin/users/:id"]
-      assert user_show_2.path in ["/api/users/:id", "/admin/users/:id"]
-      assert user_show_1.path != user_show_2.path
+      assert api_route
+      assert admin_route
+      assert api_route.path == "/api/users/:id"
+      assert admin_route.path == "/admin/users/:id"
     end
 
     test "ensures all generated names are unique" do
