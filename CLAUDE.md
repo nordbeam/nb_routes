@@ -385,14 +385,149 @@ export default defineConfig({
 
 ### With nb_inertia
 
-Route helpers are commonly used in Inertia.js frontends:
+**Integration Status**: ✅ Fully integrated (Wayfinder-style)
+
+nb_routes rich mode integrates seamlessly with nb_inertia's enhanced components. This "Wayfinder-style" integration allows RouteResult objects to be passed directly to Inertia components.
+
+#### How It Works
+
+1. **nb_routes** generates route helpers that return RouteResult objects:
+   ```typescript
+   user_path(1)                  // => { url: "/users/1", method: "get" }
+   update_user_path.patch(1)     // => { url: "/users/1", method: "patch" }
+   ```
+
+2. **nb_inertia** provides enhanced components that accept RouteResult objects:
+   ```typescript
+   import { router, Link, useForm } from '@/lib/inertia';
+   import { user_path, update_user_path } from '@/routes';
+
+   // router accepts RouteResult
+   router.visit(user_path(1));                    // Automatically uses GET
+   router.visit(update_user_path.patch(1));       // Automatically uses PATCH
+
+   // Link accepts RouteResult
+   <Link href={user_path(1)}>View User</Link>
+   <Link href={update_user_path.patch(1)}>Edit</Link>
+
+   // useForm can be bound to a route
+   const form = useForm({ name: 'John' }, update_user_path.patch(1));
+   form.submit();  // No need to specify method or URL!
+   ```
+
+#### Enhanced Components
+
+nb_inertia provides three enhanced components (React and Vue):
+
+1. **router** - Accepts RouteResult in all methods (visit, get, post, patch, put, delete)
+2. **Link** - Accepts RouteResult in href prop, automatically extracts URL and method
+3. **useForm** - Optional route binding, simplifies submit() when bound to a route
+
+#### Installation
+
+The nb_inertia installer automatically creates `assets/js/lib/inertia.{ts,js}`:
+
+```bash
+mix nb_inertia.install --client-framework react --typescript
+```
+
+This generates a file that re-exports enhanced components:
 
 ```typescript
-import { router } from '@inertiajs/react';
-import { user_path } from './routes';
-
-router.visit(user_path(user.id));
+// assets/js/lib/inertia.ts
+export { router } from '@nordbeam/nb-inertia/react/router';
+export { Link } from '@nordbeam/nb-inertia/react/Link';
+export { useForm } from '@nordbeam/nb-inertia/react/useForm';
+export * from '@inertiajs/react';
 ```
+
+#### Usage Examples
+
+**Simple Navigation:**
+```typescript
+import { router, Link } from '@/lib/inertia';
+import { users_path, user_path } from '@/routes';
+
+// Programmatic navigation
+router.visit(users_path());
+
+// Link component
+<Link href={user_path(user.id)}>View User</Link>
+```
+
+**Form Submission:**
+```typescript
+import { useForm } from '@/lib/inertia';
+import { update_user_path } from '@/routes';
+
+function EditUser({ user }) {
+  // Bind form to route
+  const form = useForm(
+    { name: user.name, email: user.email },
+    update_user_path.patch(user.id)
+  );
+
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); form.submit(); }}>
+      <input
+        value={form.data.name}
+        onChange={e => form.setData('name', e.target.value)}
+      />
+      <button type="submit">Save</button>
+    </form>
+  );
+}
+```
+
+**Method Variants:**
+```typescript
+import { Link } from '@/lib/inertia';
+import { user_path, update_user_path, delete_user_path } from '@/routes';
+
+// GET request
+<Link href={user_path.get(1)}>View</Link>
+
+// PATCH request
+<Link href={update_user_path.patch(1)}>Edit</Link>
+
+// DELETE request
+<Link href={delete_user_path.delete(1)} as="button">Delete</Link>
+```
+
+#### Backward Compatibility
+
+All enhanced components are 100% backward compatible with standard Inertia usage:
+
+```typescript
+// Standard string URLs still work
+router.visit('/users/1');
+<Link href="/users/1">View</Link>
+form.submit('post', '/users');
+```
+
+The RouteResult support is **additive** - pass a RouteResult for enhanced functionality, or use strings for standard Inertia behavior.
+
+#### Type Safety
+
+TypeScript fully supports the integration:
+
+```typescript
+import type { RouteResult, RouteOptions } from './routes';
+
+// RouteResult type
+type RouteResult = {
+  url: string;
+  method: 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+};
+
+// Enhanced component props accept RouteResult
+type EnhancedLinkProps = {
+  href: string | RouteResult;
+  // ... other Inertia Link props
+};
+```
+
+See `nb_inertia/CLAUDE.md` for detailed documentation on enhanced components.
 
 ### With nb_ts
 
