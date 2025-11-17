@@ -92,7 +92,7 @@ defmodule Mix.Tasks.NbRoutes.Gen do
 
     unless router do
       Mix.shell().error("""
-      Could not detect Phoenix router module.
+      NbRoutes: Could not detect Phoenix router module.
 
       Please specify the router explicitly:
 
@@ -106,32 +106,32 @@ defmodule Mix.Tasks.NbRoutes.Gen do
       exit({:shutdown, 1})
     end
 
-    Mix.shell().info("Generating route helpers from #{inspect(router)}...")
+    Mix.shell().info("NbRoutes: Generating route helpers from #{inspect(router)}...")
 
     # Generate JavaScript
     output_file = Keyword.get(config_opts, :output_file, "assets/js/routes.js")
 
     try do
       js_file = NbRoutes.generate!(output_file, router, config_opts)
-      Mix.shell().info("✓ Generated #{js_file}")
+      Mix.shell().info("NbRoutes: ✓ Generated #{js_file}")
 
       # Generate TypeScript definitions unless --no-types
       unless Keyword.get(opts, :types) == false do
         config = Configuration.new(config_opts)
         types_file = Configuration.types_file(config)
         ts_file = NbRoutes.definitions!(types_file, router, config_opts)
-        Mix.shell().info("✓ Generated #{ts_file}")
+        Mix.shell().info("NbRoutes: ✓ Generated #{ts_file}")
       end
 
       # Count routes
       routes = NbRoutes.routes(router, config_opts)
-      Mix.shell().info("Generated #{length(routes)} route helper(s)")
+      Mix.shell().info("NbRoutes: Generated #{length(routes)} route helper(s)")
 
       # Show some examples
       show_examples(routes)
     rescue
       e ->
-        Mix.shell().error("Error generating routes: #{Exception.message(e)}")
+        Mix.shell().error("NbRoutes: Error generating routes: #{Exception.message(e)}")
         Mix.shell().error(Exception.format(:error, e, __STACKTRACE__))
         exit({:shutdown, 1})
     end
