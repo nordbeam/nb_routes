@@ -126,9 +126,6 @@ defmodule Mix.Tasks.NbRoutes.Gen do
       # Count routes
       routes = NbRoutes.routes(router, config_opts)
       Mix.shell().info("NbRoutes: Generated #{length(routes)} route helper(s)")
-
-      # Show some examples
-      show_examples(routes)
     rescue
       e ->
         Mix.shell().error("NbRoutes: Error generating routes: #{Exception.message(e)}")
@@ -238,27 +235,5 @@ defmodule Mix.Tasks.NbRoutes.Gen do
       end
 
     config_opts
-  end
-
-  defp show_examples(routes) do
-    Mix.shell().info("\nExample usage:")
-
-    routes
-    |> Enum.take(3)
-    |> Enum.each(fn route ->
-      example =
-        if Enum.empty?(route.required_params) do
-          "#{route.name}()"
-        else
-          params = Enum.map_join(route.required_params, ", ", fn _ -> "1" end)
-          "#{route.name}(#{params})"
-        end
-
-      Mix.shell().info("  #{example}")
-    end)
-
-    if length(routes) > 3 do
-      Mix.shell().info("  ...")
-    end
   end
 end
