@@ -109,6 +109,14 @@ defmodule NbRoutes.TypeGenerator do
       (...args: TParams): RouteResult;
       /** GET method variant */
       get(...args: TParams): RouteResult;
+      /** POST method variant */
+      post(...args: TParams): RouteResult;
+      /** PATCH method variant */
+      patch(...args: TParams): RouteResult;
+      /** PUT method variant */
+      put(...args: TParams): RouteResult;
+      /** DELETE method variant */
+      delete(...args: TParams): RouteResult;
       /** HEAD method variant */
       head(...args: TParams): RouteResult;
       /** URL-only variant - returns just the URL string */
@@ -134,6 +142,14 @@ defmodule NbRoutes.TypeGenerator do
       (...args: TParams): RouteResult;
       /** GET method variant */
       get(...args: TParams): RouteResult;
+      /** POST method variant */
+      post(...args: TParams): RouteResult;
+      /** PATCH method variant */
+      patch(...args: TParams): RouteResult;
+      /** PUT method variant */
+      put(...args: TParams): RouteResult;
+      /** DELETE method variant */
+      delete(...args: TParams): RouteResult;
       /** HEAD method variant */
       head(...args: TParams): RouteResult;
       /** URL-only variant - returns just the URL string */
@@ -200,6 +216,14 @@ defmodule NbRoutes.TypeGenerator do
       (...args: TParams): RouteResult;
       /** GET method variant */
       get(...args: TParams): RouteResult;
+      /** POST method variant */
+      post(...args: TParams): RouteResult;
+      /** PATCH method variant */
+      patch(...args: TParams): RouteResult;
+      /** PUT method variant */
+      put(...args: TParams): RouteResult;
+      /** DELETE method variant */
+      delete(...args: TParams): RouteResult;
       /** HEAD method variant */
       head(...args: TParams): RouteResult;
       /** URL-only variant - returns just the URL string */
@@ -262,8 +286,7 @@ defmodule NbRoutes.TypeGenerator do
 
   defp generate_route_types(routes, config) do
     routes
-    |> Enum.map(&generate_route_type(&1, config))
-    |> Enum.join("\n\n")
+    |> Enum.map_join("\n\n", &generate_route_type(&1, config))
   end
 
   defp generate_route_type(%Route{} = route, config) do
