@@ -20,9 +20,15 @@ Add `nb_routes` to your `mix.exs` dependencies:
 ```elixir
 def deps do
   [
-    {:nb_routes, "~> 0.1.0"}
+    {:nb_routes, github: "nordbeam/nb_routes"}
   ]
 end
+```
+
+Then fetch and generate:
+
+```bash
+mix deps.get
 ```
 
 ## Quick Start
