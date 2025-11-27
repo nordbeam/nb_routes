@@ -80,11 +80,14 @@ defmodule Mix.Tasks.NbRoutes.Gen do
     # Build configuration from options
     config_opts = build_config_opts(opts)
 
-    # Resolve router module
+    # Resolve router module (CLI option > config > auto-detect)
     router =
       case Keyword.get(opts, :router) do
         nil ->
-          NbRoutes.Generator.detect_router()
+          case Application.get_env(:nb_routes, :router) do
+            nil -> NbRoutes.Generator.detect_router()
+            router_module -> router_module
+          end
 
         module_name ->
           Module.concat([module_name])
