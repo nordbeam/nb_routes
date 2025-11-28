@@ -304,7 +304,15 @@ defmodule NbRoutes do
   # Private functions
 
   defp build_config(opts) do
-    app_config = Application.get_env(:nb_routes, :config, [])
+    # Read all config keys from :nb_routes application env
+    # Supports both `config :nb_routes, variant: :rich` (top-level)
+    # and `config :nb_routes, config: [variant: :rich]` (nested)
+    app_config =
+      case Application.get_all_env(:nb_routes) do
+        [] -> []
+        env -> Keyword.get(env, :config, env)
+      end
+
     merged_opts = Keyword.merge(app_config, opts)
     Configuration.new(merged_opts)
   end
