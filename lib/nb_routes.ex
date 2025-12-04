@@ -61,24 +61,33 @@ defmodule NbRoutes do
     @after_compile {NbTs.CompileHooks, :__after_compile__}
   end
 
-  alias NbRoutes.{CodeGenerator, Configuration, Generator, TypeGenerator}
+  alias NbRoutes.{CodeGenerator, Configuration, Generator, ResourceGenerator, TypeGenerator}
 
   @doc """
-  Generates JavaScript route helper code from the given router.
+  Generates JavaScript/TypeScript route helper code from the given router.
 
   ## Options
 
   All options from `NbRoutes.Configuration` are supported.
 
+  ## Return Value
+
+  In classic mode (default), returns a string containing the generated JavaScript code.
+  In resource mode (`style: :resource`), returns a list of file maps with `:path` and `:content` keys.
+
   ## Examples
 
-      # Generate JavaScript code
+      # Classic mode - generate JavaScript code
       code = NbRoutes.generate(MyAppWeb.Router)
       # => "export const users_path = ..."
 
       # Generate as CommonJS
       code = NbRoutes.generate(MyAppWeb.Router, module_type: :cjs)
       # => "module.exports.users_path = ..."
+
+      # Resource mode - generate per-resource TypeScript files
+      files = NbRoutes.generate(MyAppWeb.Router, style: :resource)
+      # => [%{path: "users.ts", content: "..."}, %{path: "posts.ts", content: "..."}, ...]
 
   """
   def generate(router \\ nil, opts \\ []) do
@@ -98,14 +107,25 @@ defmodule NbRoutes do
     end
 
     routes = Generator.extract_routes(router, opts)
-    CodeGenerator.generate(routes, config)
+
+    case config.style do
+      :resource ->
+        ResourceGenerator.generate(routes, config)
+
+      :classic ->
+        CodeGenerator.generate(routes, config)
+    end
   end
 
   @doc """
-  Generates JavaScript route helpers and writes to the specified file.
+  Generates JavaScript route helpers and writes to the specified file or directory.
+
+  In classic mode (default), writes a single JavaScript file.
+  In resource mode (`style: :resource`), writes multiple TypeScript files to the directory.
 
   ## Examples
 
+      # Classic mode - single file
       NbRoutes.generate!("assets/js/routes.js", MyAppWeb.Router)
 
       NbRoutes.generate!("assets/js/routes.js", MyAppWeb.Router,
@@ -113,12 +133,37 @@ defmodule NbRoutes do
         include: [~r/^api_/]
       )
 
+      # Resource mode - multiple files
+      NbRoutes.generate!("assets/js/routes", MyAppWeb.Router, style: :resource)
+
   """
-  def generate!(file_path, router \\ nil, opts \\ []) do
-    code = generate(router, opts)
-    File.mkdir_p!(Path.dirname(file_path))
-    File.write!(file_path, code)
-    file_path
+  def generate!(output_path, router \\ nil, opts \\ []) do
+    config = build_config(opts)
+    result = generate(router, opts)
+
+    case config.style do
+      :resource ->
+        write_resource_files!(output_path, result)
+
+      :classic ->
+        File.mkdir_p!(Path.dirname(output_path))
+        File.write!(output_path, result)
+        output_path
+    end
+  end
+
+  defp write_resource_files!(output_dir, files) when is_list(files) do
+    File.mkdir_p!(output_dir)
+
+    written_files =
+      Enum.map(files, fn %{path: relative_path, content: content} ->
+        full_path = Path.join(output_dir, relative_path)
+        File.mkdir_p!(Path.dirname(full_path))
+        File.write!(full_path, content)
+        full_path
+      end)
+
+    written_files
   end
 
   @doc """

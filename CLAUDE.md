@@ -55,6 +55,16 @@ Developer guidance for Claude Code when working with the nb_routes package.
    - CLI interface: `mix nb_routes.gen`
    - Command-line options for configuration
 
+10. **NbRoutes.ResourceGenerator** (`lib/nb_routes/resource_generator.ex`)
+    - Groups routes by resource for Resource Mode
+    - Infers action names (index, show, new, create, edit, update, delete, restore, confirm)
+    - Handles scope prefix stripping and resource name deduplication
+
+11. **NbRoutes.ResourceTypeScript** (`lib/nb_routes/resource_typescript.ex`)
+    - Generates per-resource TypeScript files for Resource Mode
+    - Creates wayfinder.ts runtime library
+    - Generates barrel file (index.ts) for re-exports
+
 ### Data Flow
 
 ```
@@ -209,15 +219,282 @@ Rich mode tests in `test/nb_routes/code_generator_test.exs`:
 4. **_buildUrl export** (lines 199-205): Exported in ESM
 5. **_buildFormAction helper** (lines 306-326): Method spoofing logic
 
+## Resource Mode Implementation
+
+### Overview
+
+Resource mode generates per-resource TypeScript files instead of a single routes.js file, enabling better tree-shaking and a more Phoenix-idiomatic developer experience (similar to Laravel's Wayfinder package).
+
+```typescript
+// Classic mode: single file with all routes
+import { users_path, posts_path, contacts_path } from './routes';
+
+// Resource mode: per-resource imports
+import { users } from '@/routes';
+import { posts } from '@/routes';
+
+users.index();       // GET /users
+users.show(1);       // GET /users/1
+users.update.patch(1); // PATCH /users/1
+```
+
+### Architecture
+
+**Configuration Options (Configuration.ex):**
+- `style`: `:classic` | `:resource` - Controls generation style
+- `output_dir`: Directory for resource files (default: "assets/js/routes")
+- `group_by`: `:resource` | `:scope` | `:controller` - Grouping strategy
+- `include_index`: `boolean` - Generate barrel file (index.ts)
+- `include_live`: `boolean` - Include LiveView routes
+
+**Data Flow:**
+
+```
+Phoenix Router
+  ↓
+Generator.extract_routes()
+  ↓
+[Route structs]
+  ↓
+ResourceGenerator.group_by_resource()
+  ↓
+%{resource_name => [routes]}
+  ↓
+ResourceTypeScript.generate_all()
+  ↓
+[%{path: "users.ts", content: "..."}, ...]
+  ↓
+NbRoutes.write_resource_files!()
+  ↓
+assets/js/routes/
+├── index.ts
+├── lib/wayfinder.ts
+├── users.ts
+├── posts.ts
+└── ...
+```
+
+### ResourceGenerator Module
+
+**Key Functions:**
+
+1. **`group_by_resource/2`** - Groups routes by inferred resource name
+   ```elixir
+   # Input: [%Route{name: "users_path"}, %Route{name: "edit_user_path"}, ...]
+   # Output: %{users: [%{action: :index, route: ...}, %{action: :edit, route: ...}]}
+   ```
+
+2. **`infer_action_name/1`** - Infers CRUD action from route
+   ```elixir
+   # Inference order:
+   # 1. Helper name prefix patterns (new_, edit_, create_, update_, delete_, restore_)
+   # 2. Helper name suffix patterns (_restore_path, _confirm_path, _new_path)
+   # 3. Path patterns (/new$, /:id/edit$, /:id/restore$)
+   # 4. HTTP verb for standard CRUD (POST→create, PATCH/PUT→update, DELETE→delete)
+   # 5. GET routes: collection (no :id) → index, member (with :id) → show
+   ```
+
+3. **`infer_resource_name/1`** - Extracts resource name from helper
+   ```elixir
+   # "users_path" → "users"
+   # "edit_user_path" → "users"  (singularized to plural)
+   # "api_v1_products_path" → "products" (scope stripped)
+   ```
+
+**Critical Implementation Details:**
+
+- **Verb Normalization**: Phoenix uses lowercase verb atoms (`:get`, `:post`). The code normalizes to uppercase for comparison.
+  ```elixir
+  verb_upper = verb |> Atom.to_string() |> String.upcase() |> String.to_atom()
+  ```
+
+- **Scope Prefix Stripping**: Removes full scope prefix from helper names
+  ```elixir
+  # [:api, :v1] scope → strips "api_v1_" prefix
+  defp strip_scope_prefix(name, scope) do
+    scope_prefix = scope |> Enum.map(&Atom.to_string/1) |> Enum.join("_") |> Kernel.<>("_")
+    String.replace_prefix(name, scope_prefix, "")
+  end
+  ```
+
+- **Resource Name Deduplication**: Handles patterns like `contacts_contacts`
+  ```elixir
+  defp deduplicate_resource_name(name) do
+    parts = String.split(name, "_")
+    case parts do
+      [first, second | _rest] when first == second -> first
+      _ -> name
+    end
+  end
+  ```
+
+### ResourceTypeScript Module
+
+**Reserved Word Handling:**
+
+JavaScript reserved words (`new`, `delete`, `class`, `import`, etc.) cannot be used as variable names but CAN be used as object property names. The generator handles this by:
+
+1. Using escaped names for `const` declarations: `const new_ = route(...)`
+2. Using clean names in object literals: `{ new: new_, delete: delete_ }`
+3. Exporting escaped names: `export { new_, delete_ }`
+
+This gives users a clean API:
+```typescript
+users.new();      // ✓ Clean property access
+users.delete(1);  // ✓ Clean property access
+```
+
+The `safe_js_name/1` function escapes reserved words, and `is_reserved_word?/1` checks if escaping is needed.
+
+**Key Functions:**
+
+1. **`generate_all/2`** - Generates all files for resource mode
+   ```elixir
+   # Returns: [
+   #   %{path: "lib/wayfinder.ts", content: "..."},
+   #   %{path: "users.ts", content: "..."},
+   #   %{path: "index.ts", content: "..."}
+   # ]
+   ```
+
+2. **`generate_runtime/1`** - Generates wayfinder.ts runtime library
+   - `route<T>()` function factory with method variants
+   - `Param` type for Phoenix.Param-style extraction
+   - `RouteResult`, `RouteOptions`, `FormAttrs` types
+
+3. **`generate_resource/3`** - Generates single resource file
+   ```typescript
+   // users.ts
+   import { route, type Route, type RouteOptions, type Param } from '../lib/wayfinder';
+
+   const index = route('/users', 'get');
+   const new_ = route('/users/new', 'get');  // Escaped for const declaration
+   const delete_ = route('/users/:id', 'delete');  // Escaped for const declaration
+   // ...
+
+   // Object uses clean property names for nice API (users.new, users.delete)
+   export const users = { index, new: new_, delete: delete_, /* ... */ } as const;
+   export { index, new_, delete_, /* ... */ };
+   ```
+
+4. **`generate_index/2`** - Generates barrel file (index.ts)
+   ```typescript
+   export { users } from './users';
+   export { posts } from './posts';
+   // ...
+   export type { Route, RouteOptions, FormAttrs, Param, Method } from './lib/wayfinder';
+   ```
+
+### TypeScript Runtime (wayfinder.ts)
+
+**Core Types:**
+
+```typescript
+type Method = 'get' | 'post' | 'put' | 'patch' | 'delete' | 'head';
+type Param = string | number | { id: string | number } | { toString(): string };
+
+interface RouteResult { url: string; method: Method; }
+interface RouteOptions { query?: Record<string, any>; mergeQuery?: Record<string, any>; anchor?: string; }
+interface FormAttrs { action: string; method: 'get' | 'post'; }
+```
+
+**Route Function:**
+
+```typescript
+function route<T extends Record<string, Param> = Record<string, never>>(
+  pattern: string,
+  defaultMethod: Method
+): Route<T> {
+  const buildUrl = (params?: T, opts?: RouteOptions): string => {
+    // 1. Replace :param placeholders with values
+    // 2. Extract id from objects (Phoenix.Param style)
+    // 3. Handle query parameters and anchors
+  };
+
+  const mainFn = (params?: T, opts?: RouteOptions): RouteResult => ({
+    url: buildUrl(params, opts),
+    method: defaultMethod
+  });
+
+  // Add method variants
+  return Object.assign(mainFn, {
+    get: (p, o) => ({ url: buildUrl(p, o), method: 'get' }),
+    post: (p, o) => ({ url: buildUrl(p, o), method: 'post' }),
+    // ... other methods
+    url: (p, o) => buildUrl(p, o),  // Returns string only
+    form: /* form helpers with method spoofing */
+  });
+}
+```
+
+### Mix Task Integration
+
+**CLI Options:**
+```bash
+mix nb_routes.gen --style resource         # Enable resource mode
+mix nb_routes.gen --output-dir path        # Custom output directory
+mix nb_routes.gen --group-by scope         # Group by URL scope
+mix nb_routes.gen --no-index               # Skip barrel file
+mix nb_routes.gen --no-live                # Exclude LiveView routes
+```
+
+**Generation Flow in `NbRoutes.generate!/3`:**
+```elixir
+def generate!(output_path, router, opts) do
+  config = build_config(opts)
+  result = generate(router, opts)
+
+  case config.style do
+    :resource ->
+      write_resource_files!(output_path, result)  # Multiple files
+
+    :classic ->
+      File.write!(output_path, result)  # Single file
+  end
+end
+```
+
+### Testing
+
+Resource mode tests are in:
+- `test/nb_routes/resource_generator_test.exs` - Route grouping and action inference
+- `test/nb_routes/resource_typescript_test.exs` - TypeScript file generation
+- `test/nb_routes/configuration_test.exs` - Style/output_dir configuration
+
+**Key Test Cases:**
+
+1. **Action inference from HTTP verbs** - Verifies POST→create, PATCH→update, etc.
+2. **Resource name extraction** - Handles prefixes, suffixes, scopes
+3. **API versioned routes** - `[:api, :v1, :products]` scope handling
+4. **JavaScript reserved words** - Clean property names (`users.new`, `users.delete`)
+5. **Runtime TypeScript generation** - Method variants, form helpers
+
+### Common Issues
+
+**Issue**: Routes all becoming separate resources instead of grouping
+- **Cause**: Action suffix not being stripped from helper name
+- **Solution**: Add pattern to `strip_action_suffix/1` regex
+
+**Issue**: Wrong action inferred (e.g., restore→update)
+- **Cause**: Missing path pattern or verb not normalized
+- **Solution**: Add specific pattern before generic verb checks, normalize verb case
+
+**Issue**: Duplicate resource names like `contacts_contacts`
+- **Cause**: Helper name pattern causing doubling
+- **Solution**: `deduplicate_resource_name/1` handles `[first, second | _] when first == second`
+
 ## Key Design Decisions
 
 1. **Optional Dependencies**: None - nb_routes is standalone
 2. **Dual Mode System**: Supports both simple mode (URL strings) and rich mode (objects with method info)
-3. **Module Formats**: Supports ESM, CJS, UMD, and global namespace
-4. **Code Generation**: Compile-time generation via Mix task
-5. **Route Introspection**: Uses `Phoenix.Router.__routes__()`
-6. **Method Variants**: Rich mode provides `.get`, `.post`, `.url` variants for flexibility
-7. **Form Integration**: Optional form helpers with automatic method spoofing for HTML forms
+3. **Triple Style System**: Classic (single file), Resource (per-resource files), enabling tree-shaking
+4. **Module Formats**: Supports ESM, CJS, UMD, and global namespace
+5. **Code Generation**: Compile-time generation via Mix task
+6. **Route Introspection**: Uses `Phoenix.Router.__routes__()`
+7. **Method Variants**: Rich mode provides `.get`, `.post`, `.url` variants for flexibility
+8. **Form Integration**: Optional form helpers with automatic method spoofing for HTML forms
+9. **Phoenix.Param Style**: Resource mode extracts `id` from objects automatically
+10. **Wayfinder Inspiration**: Resource mode inspired by Laravel's Wayfinder package
 
 ## Common Development Tasks
 

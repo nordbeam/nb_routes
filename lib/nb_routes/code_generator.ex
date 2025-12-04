@@ -125,23 +125,35 @@ defmodule NbRoutes.CodeGenerator do
       // Handle query parameters
       const queryParams = [];
 
+      // Helper to add a query param, handling arrays properly
+      const addQueryParam = (key, value) => {
+        if (value === undefined || value === null) return;
+        if (Array.isArray(value)) {
+          // Handle arrays by creating multiple params with the same key
+          value.forEach(v => {
+            if (v !== undefined && v !== null) {
+              queryParams.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(v)));
+            }
+          });
+        } else {
+          queryParams.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(value)));
+        }
+      };
+
       if (options.query) {
         Object.keys(options.query).forEach(key => {
-          const value = options.query[key];
-          if (value !== undefined && value !== null) {
-            queryParams.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(value)));
-          }
+          addQueryParam(key, options.query[key]);
         });
       }
 
       if (options.mergeQuery) {
         Object.keys(options.mergeQuery).forEach(key => {
           const value = options.mergeQuery[key];
-          if (value !== undefined && value !== null) {
-            queryParams.push(encodeURIComponent(key) + '=' + encodeURIComponent(String(value)));
-          } else if (value === null) {
+          if (value === null) {
             // null explicitly removes the param (useful for overriding)
             // Skip it
+          } else {
+            addQueryParam(key, value);
           }
         });
       }

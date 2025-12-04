@@ -18,6 +18,12 @@ defmodule NbRoutes.ConfigurationTest do
       assert config.default_url_options == %{}
       assert config.documentation == true
       assert config.router == nil
+      # New resource mode defaults
+      assert config.style == :classic
+      assert config.output_dir == "assets/js/routes"
+      assert config.include_live == true
+      assert config.include_index == true
+      assert config.group_by == :resource
     end
 
     test "creates configuration with custom options" do
@@ -31,6 +37,23 @@ defmodule NbRoutes.ConfigurationTest do
       assert config.module_type == :cjs
       assert config.output_file == "public/routes.js"
       assert config.camel_case == true
+    end
+
+    test "creates resource mode configuration" do
+      config =
+        Configuration.new(
+          style: :resource,
+          output_dir: "assets/js/custom",
+          include_live: false,
+          include_index: false,
+          group_by: :scope
+        )
+
+      assert config.style == :resource
+      assert config.output_dir == "assets/js/custom"
+      assert config.include_live == false
+      assert config.include_index == false
+      assert config.group_by == :scope
     end
   end
 
@@ -79,6 +102,46 @@ defmodule NbRoutes.ConfigurationTest do
       config = %Configuration{exclude: "invalid"}
       assert {:error, msg} = Configuration.validate(config)
       assert msg =~ "must be a list"
+    end
+
+    test "rejects invalid style" do
+      config = %Configuration{style: :invalid}
+      assert {:error, msg} = Configuration.validate(config)
+      assert msg =~ "Invalid style"
+    end
+
+    test "accepts valid style :classic" do
+      config = %Configuration{style: :classic}
+      assert Configuration.validate(config) == :ok
+    end
+
+    test "accepts valid style :resource" do
+      config = %Configuration{style: :resource}
+      assert Configuration.validate(config) == :ok
+    end
+
+    test "rejects invalid group_by" do
+      config = %Configuration{group_by: :invalid}
+      assert {:error, msg} = Configuration.validate(config)
+      assert msg =~ "Invalid group_by"
+    end
+
+    test "accepts valid group_by options" do
+      assert Configuration.validate(%Configuration{group_by: :resource}) == :ok
+      assert Configuration.validate(%Configuration{group_by: :scope}) == :ok
+      assert Configuration.validate(%Configuration{group_by: :controller}) == :ok
+    end
+  end
+
+  describe "resource mode helpers" do
+    test "is_resource_mode?/1 returns true for resource style" do
+      config = Configuration.new(style: :resource)
+      assert Configuration.is_resource_mode?(config) == true
+    end
+
+    test "is_resource_mode?/1 returns false for classic style" do
+      config = Configuration.new(style: :classic)
+      assert Configuration.is_resource_mode?(config) == false
     end
   end
 end

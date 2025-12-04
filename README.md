@@ -270,6 +270,186 @@ formProps.method;   // 'get' | 'post'
 - Optimizing for minimal JavaScript bundle size
 - Don't need method information in the frontend
 
+## Resource Mode
+
+Resource mode generates per-resource TypeScript files for better tree-shaking and a more Phoenix-idiomatic developer experience. Instead of a single routes.js file, it creates one file per resource.
+
+### Enable Resource Mode
+
+```bash
+# CLI
+mix nb_routes.gen --style resource --output-dir assets/js/routes
+
+# Or in config/config.exs
+config :nb_routes,
+  style: :resource,
+  output_dir: "assets/js/routes"
+```
+
+### Generated File Structure
+
+```
+assets/js/routes/
+├── index.ts           # Barrel file re-exporting all resources
+├── lib/
+│   └── wayfinder.ts   # Runtime library with route() function
+├── users.ts           # Users resource (index, show, new, create, edit, update, delete)
+├── posts.ts           # Posts resource
+├── contacts.ts        # Contacts resource
+└── organizations.ts   # Organizations resource
+```
+
+### Generated Resource Files
+
+Each resource file contains all CRUD actions with full TypeScript types:
+
+```typescript
+// assets/js/routes/users.ts
+import { route, type Route, type RouteOptions, type Param } from '../lib/wayfinder';
+
+const index = route('/users', 'get');
+const new_ = route('/users/new', 'get');
+const create = route('/users', 'post');
+const show = route<{ id: Param }>('/users/:id', 'get');
+const edit = route<{ id: Param }>('/users/:id/edit', 'get');
+const update = route<{ id: Param }>('/users/:id', 'put');
+const delete_ = route<{ id: Param }>('/users/:id', 'delete');
+
+// Object uses clean property names (new, delete) for nice API
+export const users = {
+  index,
+  new: new_,
+  create,
+  show,
+  edit,
+  update,
+  delete: delete_,
+} as const;
+
+export { index, new_, create, show, edit, update, delete_ };
+```
+
+### Usage in Frontend Code
+
+```typescript
+// Tree-shakeable imports - only imports what you use
+import { users } from '@/routes';
+
+// Use the resource object - clean property names!
+router.visit(users.index());                    // GET /users
+router.visit(users.show(1));                    // GET /users/1
+router.visit(users.new());                      // GET /users/new
+router.visit(users.delete(1));                  // DELETE /users/1
+router.visit(users.update.patch(1));            // PATCH /users/1
+
+// With Link component
+<Link href={users.show(user.id)}>View User</Link>
+<Link href={users.edit(user.id)}>Edit</Link>
+<Link href={users.new()}>New User</Link>
+```
+
+### Route Function API
+
+The `route()` function returns a route helper with method variants:
+
+```typescript
+const show = route<{ id: Param }>('/users/:id', 'get');
+
+// Main function - returns { url, method }
+show(1);                    // { url: "/users/1", method: "get" }
+show({ id: 1 });            // { url: "/users/1", method: "get" }
+
+// Method variants
+show.get(1);                // { url: "/users/1", method: "get" }
+show.post(1);               // { url: "/users/1", method: "post" }
+show.patch(1);              // { url: "/users/1", method: "patch" }
+show.put(1);                // { url: "/users/1", method: "put" }
+show.delete(1);             // { url: "/users/1", method: "delete" }
+show.url(1);                // "/users/1" (just the URL string)
+
+// Form helpers (for HTML form method spoofing)
+show.form(1);               // { action: "/users/1", method: "get" }
+show.form.patch(1);         // { action: "/users/1?_method=PATCH", method: "post" }
+show.form.put(1);           // { action: "/users/1?_method=PUT", method: "post" }
+show.form.delete(1);        // { action: "/users/1?_method=DELETE", method: "post" }
+
+// Query parameters and options
+show(1, { query: { tab: 'settings' } });    // { url: "/users/1?tab=settings", method: "get" }
+show(1, { anchor: 'profile' });             // { url: "/users/1#profile", method: "get" }
+```
+
+### Phoenix.Param-Style Parameter Extraction
+
+The runtime automatically extracts `id` from objects:
+
+```typescript
+const user = { id: 123, name: "John" };
+
+users.show(user);           // Extracts user.id → "/users/123"
+users.show(123);            // Direct value → "/users/123"
+users.show({ id: 123 });    // Object with id → "/users/123"
+```
+
+### Resource Mode CLI Options
+
+```bash
+# Enable resource mode
+mix nb_routes.gen --style resource
+
+# Custom output directory
+mix nb_routes.gen --style resource --output-dir assets/js/routes
+
+# Group routes by scope instead of resource
+mix nb_routes.gen --style resource --group-by scope
+
+# Skip generating index.ts barrel file
+mix nb_routes.gen --style resource --no-index
+
+# Exclude LiveView routes
+mix nb_routes.gen --style resource --no-live
+```
+
+### Configuration Options
+
+```elixir
+config :nb_routes,
+  # Resource mode options
+  style: :resource,                    # :classic (default) | :resource
+  output_dir: "assets/js/routes",      # Output directory for resource files
+  group_by: :resource,                 # :resource | :scope | :controller
+  include_index: true,                 # Generate index.ts barrel file
+  include_live: true                   # Include LiveView routes
+```
+
+### Grouping Strategies
+
+**`:resource` (default)** - Groups by resource name from helper:
+```
+users_path, user_path, new_user_path → users.ts
+posts_path, post_path → posts.ts
+```
+
+**`:scope`** - Groups by URL path scope:
+```
+/admin/users → admin/users.ts
+/api/v1/products → api/v1/products.ts
+```
+
+**`:controller`** - Groups by controller module (coming soon)
+
+### When to Use Resource Mode
+
+**Use Resource Mode when:**
+- You want better tree-shaking (only import what you use)
+- You prefer a more Phoenix-idiomatic import style
+- Building larger apps with many routes
+- Using TypeScript and want excellent type inference
+
+**Use Classic Mode when:**
+- You have a small number of routes
+- You prefer a single routes file
+- You need compatibility with existing code
+
 ## Configuration
 
 Configure in `config/config.exs`:

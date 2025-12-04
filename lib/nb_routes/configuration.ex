@@ -19,8 +19,17 @@ defmodule NbRoutes.Configuration do
     * `:with_methods` - Generate method variants (`.get`, `.post`, `.url`, etc). Only applies when `variant: :rich`. Defaults to `true`.
     * `:with_forms` - Generate form helpers (`.form`, `.form.put`, etc). Requires nb_inertia integration. Defaults to `false`.
 
+  ## Resource Mode Options
+
+    * `:style` - Output style. One of `:classic` (single file) or `:resource` (per-resource files). Defaults to `:classic`.
+    * `:output_dir` - Output directory for resource mode. Defaults to `"assets/js/routes"`.
+    * `:include_live` - Include LiveView routes in resource mode. Defaults to `true`.
+    * `:include_index` - Generate index.ts barrel file in resource mode. Defaults to `true`.
+    * `:group_by` - How to group routes in resource mode. One of `:resource`, `:scope`, or `:controller`. Defaults to `:resource`.
+
   ## Examples
 
+      # Classic mode (single file)
       config = %NbRoutes.Configuration{
         module_type: :esm,
         output_file: "assets/js/routes.js",
@@ -28,10 +37,19 @@ defmodule NbRoutes.Configuration do
         exclude: [~r/^admin_/]
       }
 
+      # Resource mode (per-resource files)
+      config = %NbRoutes.Configuration{
+        style: :resource,
+        output_dir: "assets/js/routes",
+        variant: :rich
+      }
+
   """
 
   @type module_type :: :esm | :cjs | :umd | nil
   @type variant :: :simple | :rich
+  @type style :: :classic | :resource
+  @type group_by :: :resource | :scope | :controller
   @type t :: %__MODULE__{
           module_type: module_type(),
           output_file: String.t(),
@@ -46,7 +64,13 @@ defmodule NbRoutes.Configuration do
           router: module() | nil,
           variant: variant(),
           with_methods: boolean(),
-          with_forms: boolean()
+          with_forms: boolean(),
+          # Resource mode options
+          style: style(),
+          output_dir: String.t(),
+          include_live: boolean(),
+          include_index: boolean(),
+          group_by: group_by()
         }
 
   @enforce_keys []
@@ -63,7 +87,13 @@ defmodule NbRoutes.Configuration do
             router: nil,
             variant: :simple,
             with_methods: true,
-            with_forms: false
+            with_forms: false,
+            # Resource mode options
+            style: :classic,
+            output_dir: "assets/js/routes",
+            include_live: true,
+            include_index: true,
+            group_by: :resource
 
   @doc """
   Creates a new configuration with the given options.
@@ -145,5 +175,31 @@ defmodule NbRoutes.Configuration do
     {:error, "exclude must be a list of regular expressions"}
   end
 
+  def validate(%__MODULE__{style: style}) when style not in [:classic, :resource] do
+    {:error, "Invalid style: #{inspect(style)}. Must be :classic or :resource"}
+  end
+
+  def validate(%__MODULE__{group_by: group_by})
+      when group_by not in [:resource, :scope, :controller] do
+    {:error, "Invalid group_by: #{inspect(group_by)}. Must be :resource, :scope, or :controller"}
+  end
+
   def validate(%__MODULE__{}), do: :ok
+
+  @doc """
+  Checks if the configuration is in resource mode.
+
+  ## Examples
+
+      iex> config = %NbRoutes.Configuration{style: :resource}
+      iex> NbRoutes.Configuration.is_resource_mode?(config)
+      true
+
+      iex> config = %NbRoutes.Configuration{style: :classic}
+      iex> NbRoutes.Configuration.is_resource_mode?(config)
+      false
+
+  """
+  def is_resource_mode?(%__MODULE__{style: :resource}), do: true
+  def is_resource_mode?(%__MODULE__{}), do: false
 end
