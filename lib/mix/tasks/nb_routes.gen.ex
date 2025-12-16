@@ -191,7 +191,9 @@ defmodule Mix.Tasks.NbRoutes.Gen do
   end
 
   defp build_config_opts(opts) do
-    config_opts = []
+    # Start with application config, CLI options override
+    app_config = Application.get_all_env(:nb_routes) |> Keyword.drop([:router])
+    config_opts = Keyword.to_list(app_config)
 
     config_opts =
       if output = Keyword.get(opts, :output) do
