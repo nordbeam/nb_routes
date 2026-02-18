@@ -46,9 +46,13 @@ defmodule NbRoutes.ResourceTypeScript do
   """
   def generate_resource_file(resource, %Configuration{} = config) do
     depth = length(resource.key)
-    import_path = String.duplicate("../", depth) <> "lib/wayfinder"
+    # depth 1 = root level (e.g., users.ts) -> ./lib/wayfinder
+    # depth 2 = one level deep (e.g., api/users.ts) -> ../lib/wayfinder
+    prefix = if depth <= 1, do: "./", else: String.duplicate("../", depth - 1)
+    import_path = prefix <> "lib/wayfinder"
 
-    imports = generate_imports(import_path)
+    has_params = Enum.any?(resource.actions, fn a -> not Enum.empty?(a.params) end)
+    imports = generate_imports(import_path, has_params)
     actions = Enum.map(resource.actions, &render_action(&1, config))
     exports = generate_resource_exports(resource)
 
@@ -170,11 +174,12 @@ defmodule NbRoutes.ResourceTypeScript do
 
   # Private functions
 
-  defp generate_imports(import_path) do
-    """
-    import { route, type Route, type RouteOptions, type Param } from '#{import_path}';
-    """
-    |> String.trim()
+  defp generate_imports(import_path, has_params) do
+    if has_params do
+      "import { route, type Param } from '#{import_path}';"
+    else
+      "import { route } from '#{import_path}';"
+    end
   end
 
   defp generate_params_type([]), do: "Record<string, never>"
