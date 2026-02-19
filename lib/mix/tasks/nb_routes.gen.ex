@@ -205,10 +205,18 @@ defmodule Mix.Tasks.NbRoutes.Gen do
     # Switching to resource mode: remove classic mode files
     types_file = classic_output_file |> Path.rootname() |> Kernel.<>(".d.ts")
 
-    Enum.each([classic_output_file, types_file], fn file ->
-      if File.exists?(file) do
-        File.rm!(file)
-        Mix.shell().info("NbRoutes: Removed stale classic mode artifact #{file}")
+    Enum.each([classic_output_file, types_file], fn path ->
+      cond do
+        File.dir?(path) ->
+          File.rm_rf!(path)
+          Mix.shell().info("NbRoutes: Removed stale classic mode artifact #{path}")
+
+        File.exists?(path) ->
+          File.rm!(path)
+          Mix.shell().info("NbRoutes: Removed stale classic mode artifact #{path}")
+
+        true ->
+          :ok
       end
     end)
   end
