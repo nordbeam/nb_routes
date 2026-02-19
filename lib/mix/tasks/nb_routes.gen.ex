@@ -159,6 +159,10 @@ defmodule Mix.Tasks.NbRoutes.Gen do
   defp generate_classic_mode!(config_opts, router, opts) do
     output_file = Keyword.get(config_opts, :output_file, "assets/js/routes.js")
 
+    # Clean up resource mode artifacts to avoid conflicts
+    resource_dir = Keyword.get(config_opts, :output_dir, "assets/js/routes")
+    cleanup_stale_artifacts(:classic, output_file, resource_dir)
+
     js_file = NbRoutes.generate!(output_file, router, config_opts)
     Mix.shell().info("NbRoutes: ✓ Generated #{js_file}")
 
@@ -178,6 +182,10 @@ defmodule Mix.Tasks.NbRoutes.Gen do
   defp generate_resource_mode!(config_opts, router, _opts) do
     output_dir = Keyword.get(config_opts, :output_dir, "assets/js/routes")
 
+    # Clean up classic mode artifacts to avoid conflicts
+    output_file = Keyword.get(config_opts, :output_file, "assets/js/routes.js")
+    cleanup_stale_artifacts(:resource, output_file, output_dir)
+
     files = NbRoutes.generate!(output_dir, router, config_opts)
 
     Enum.each(files, fn file ->
@@ -188,6 +196,29 @@ defmodule Mix.Tasks.NbRoutes.Gen do
     # Count routes
     routes = NbRoutes.routes(router, config_opts)
     Mix.shell().info("NbRoutes: Generated #{length(files)} files for #{length(routes)} route(s)")
+  end
+
+  # When switching between classic and resource modes, stale artifacts from the
+  # other mode can shadow the active output. For example, a leftover routes.d.ts
+  # from classic mode will shadow the routes/ directory in TypeScript resolution.
+  defp cleanup_stale_artifacts(:resource, classic_output_file, _resource_dir) do
+    # Switching to resource mode: remove classic mode files
+    types_file = classic_output_file |> Path.rootname() |> Kernel.<>(".d.ts")
+
+    Enum.each([classic_output_file, types_file], fn file ->
+      if File.exists?(file) do
+        File.rm!(file)
+        Mix.shell().info("NbRoutes: Removed stale classic mode artifact #{file}")
+      end
+    end)
+  end
+
+  defp cleanup_stale_artifacts(:classic, _classic_output_file, resource_dir) do
+    # Switching to classic mode: remove resource mode directory
+    if File.dir?(resource_dir) do
+      File.rm_rf!(resource_dir)
+      Mix.shell().info("NbRoutes: Removed stale resource mode directory #{resource_dir}")
+    end
   end
 
   defp build_config_opts(opts) do
