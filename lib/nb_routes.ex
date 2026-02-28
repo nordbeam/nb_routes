@@ -204,8 +204,6 @@ defmodule NbRoutes do
       NbRoutes.definitions!(MyAppWeb.Router)  # Uses configured output_file
 
   """
-  def definitions!(file_path \\ nil, router \\ nil, opts \\ [])
-
   def definitions!(file_path, router, opts) when is_binary(file_path) do
     types = definitions(router, opts)
     File.mkdir_p!(Path.dirname(file_path))
@@ -213,7 +211,7 @@ defmodule NbRoutes do
     file_path
   end
 
-  def definitions!(router, opts, _) when is_atom(router) or is_list(opts) do
+  def definitions!(router, opts \\ []) when is_atom(router) do
     config = build_config(opts)
     file_path = Configuration.types_file(config)
     definitions!(file_path, router, opts)
