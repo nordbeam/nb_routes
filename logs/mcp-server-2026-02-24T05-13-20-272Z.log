@@ -1,0 +1,33 @@
+[2026-02-24T05:13:20.302Z] [WARN] Could not read package.json from project root: Error: ENOENT: no such file or directory, open '/Users/assim/Projects/nb/nb_routes/package.json'
+[2026-02-24T05:13:20.303Z] [ERROR] Couldn't find project name in package json
+[2026-02-24T05:13:20.303Z] [WARN] Could not read package.json from project root: Error: ENOENT: no such file or directory, open '/Users/assim/Projects/nb/nb_routes/package.json'
+[2026-02-24T05:13:20.303Z] [INFO] Initializing MCP Server: unnamed-mcp-server@0.0.0
+[2026-02-24T05:13:20.303Z] [DEBUG] Initialized ToolLoader with directory: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/tools
+[2026-02-24T05:13:20.303Z] [DEBUG] Initialized PromptLoader with directory: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/prompts
+[2026-02-24T05:13:20.303Z] [DEBUG] Initialized ResourceLoader with directory: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/resources
+[2026-02-24T05:13:20.303Z] [DEBUG] Looking for tools in: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/tools
+[2026-02-24T05:13:20.303Z] [DEBUG] Looking for prompts in: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/prompts
+[2026-02-24T05:13:20.303Z] [DEBUG] Looking for resources in: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/resources
+[2026-02-24T05:13:20.303Z] [DEBUG] Attempting to load tools from: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/tools
+[2026-02-24T05:13:20.303Z] [DEBUG] No tools directory found
+[2026-02-24T05:13:20.303Z] [DEBUG] Attempting to load prompts from: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/prompts
+[2026-02-24T05:13:20.303Z] [DEBUG] No prompts directory found
+[2026-02-24T05:13:20.303Z] [DEBUG] Attempting to load resources from: /Users/assim/.npm/_npx/bbcce2fe225dfb22/node_modules/.bin/resources
+[2026-02-24T05:13:20.304Z] [DEBUG] No resources directory found
+[2026-02-24T05:13:20.304Z] [DEBUG] No prompts directory found
+[2026-02-24T05:13:20.304Z] [DEBUG] No resources directory found
+[2026-02-24T05:13:20.304Z] [DEBUG] Creating MCP Server instance
+[2026-02-24T05:13:20.304Z] [DEBUG] Server created with capabilities: {"tools":{"enabled":true}}
+[2026-02-24T05:13:20.304Z] [INFO] Starting transport...
+[2026-02-24T05:13:20.304Z] [DEBUG] Creating transport: stdio
+[2026-02-24T05:13:20.304Z] [INFO] Starting stdio transport
+[2026-02-24T05:13:20.304Z] [INFO] Transport connected successfully
+[2026-02-24T05:13:20.304Z] [INFO] Started unnamed-mcp-server@0.0.0
+[2026-02-24T05:13:20.304Z] [INFO] Transport: stdio
+[2026-02-24T05:13:20.304Z] [INFO] Server running and ready for connections
+[2026-02-24T05:13:20.305Z] [DEBUG] Transport sending message: {"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"enabled":true}},"serverInfo":{"name":"unnamed-mcp-server","version":"0.0.0"}},"jsonrpc":"2.0","id":0}
+[2026-02-24T05:13:20.305Z] [DEBUG] Received ListTools request: {"method":"tools/list","params":{"_meta":{"progressToken":0}}}
+[2026-02-24T05:13:20.305Z] [DEBUG] Found 0 tools to return
+[2026-02-24T05:13:20.305Z] [DEBUG] Tool definitions: []
+[2026-02-24T05:13:20.305Z] [DEBUG] Sending ListTools response: {"tools":[]}
+[2026-02-24T05:13:20.305Z] [DEBUG] Transport sending message: {"result":{"tools":[]},"jsonrpc":"2.0","id":1}
