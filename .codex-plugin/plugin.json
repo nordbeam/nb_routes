@@ -1,0 +1,22 @@
+{
+  "name": "nb_routes",
+  "version": "0.1.0",
+  "description": "Version-aware Codex guidance for nb_routes JavaScript and TypeScript route-helper generation.",
+  "author": { "name": "Nordbeam", "url": "https://github.com/nordbeam" },
+  "homepage": "https://github.com/nordbeam/nb_routes",
+  "repository": "https://github.com/nordbeam/nb_routes",
+  "license": "MIT",
+  "keywords": ["elixir", "phoenix", "routes", "typescript"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "nb_routes",
+    "shortDescription": "Generate typed Phoenix route helpers",
+    "longDescription": "Generate, configure, migrate, diagnose, and verify nb_routes helpers in classic, rich, form, and resource modes.",
+    "developerName": "Nordbeam",
+    "category": "Developer Tools",
+    "capabilities": ["Generate", "Configure", "Migrate", "Diagnose", "Verify"],
+    "websiteURL": "https://github.com/nordbeam/nb_routes",
+    "brandColor": "#5E3AAE",
+    "defaultPrompt": ["Use $nb-routes to generate or migrate typed Phoenix route helpers."]
+  }
+}

@@ -730,7 +730,6 @@ defmodule NbRoutes.CodeGenerator do
     to_string(data)
   end
 
-  defp inspect_js(nil), do: "null"
   defp inspect_js(data), do: inspect(data)
 
   defp inspect_js_object(map) when is_map(map) do

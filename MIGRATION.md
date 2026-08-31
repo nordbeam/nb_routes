@@ -388,7 +388,7 @@ export default defineConfig({
 
 1. Start Vite dev server:
    ```bash
-   npm run dev
+   vp dev
    # or
    mix phx.server
    ```

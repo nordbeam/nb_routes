@@ -207,7 +207,7 @@ Once documentation is complete:
 cd nb_routes && mix test
 
 # Run nb_vite plugin build
-cd nb_vite && npm run build
+cd nb_vite && vp run build
 
 # Generate routes with rich mode
 cd nb_routes

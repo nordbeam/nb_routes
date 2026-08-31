@@ -2,13 +2,13 @@ defmodule NbRoutes.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/nordbeam/nb"
+  @source_url "https://github.com/nordbeam/nb_routes"
 
   def project do
     [
       app: :nb_routes,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.15",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: description(),
@@ -28,7 +28,7 @@ defmodule NbRoutes.MixProject do
   defp deps do
     [
       {:phoenix, "~> 1.7"},
-      {:ex_doc, "~> 0.31", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
     ]
   end
 

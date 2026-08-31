@@ -1,0 +1,4 @@
+interface:
+  display_name: "nb Routes"
+  short_description: "Generate typed Phoenix routes for Vite+"
+  default_prompt: "Use $nb-routes to generate or migrate version-aware Phoenix route helpers and their Vite+ integration."
