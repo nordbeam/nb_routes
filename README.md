@@ -31,6 +31,42 @@ Then fetch and generate:
 mix deps.get
 ```
 
+### Package skills
+
+NbRoutes ships its agent skill through the standard `usage_rules` convention.
+Install the manager, configure the application project to sync the package
+skill into `.agents/skills/`, and refresh it after dependency changes:
+
+```bash
+mix igniter.install usage_rules
+```
+
+Add this to the application project's `mix.exs`:
+
+```elixir
+def project do
+  [
+    # ...
+    usage_rules: usage_rules()
+  ]
+end
+
+defp usage_rules do
+  [
+    skills: [
+      location: ".agents/skills",
+      package_skills: [:nb_routes]
+    ]
+  ]
+end
+```
+
+Then sync the configured package skill:
+
+```bash
+mix usage_rules.sync
+```
+
 ## Quick Start
 
 ### 1. Generate Route Helpers

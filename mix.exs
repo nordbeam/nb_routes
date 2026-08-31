@@ -46,14 +46,25 @@ defmodule NbRoutes.MixProject do
       links: %{
         "GitHub" => @source_url
       },
-      files: ~w(lib priv .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
+      files: ~w(
+        lib
+        priv
+        .formatter.exs
+        mix.exs
+        README.md
+        usage-rules.md
+        usage-rules
+        LICENSE
+        CHANGELOG.md
+      )
     ]
   end
 
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "CHANGELOG.md"],
+      extras: ["README.md", "CHANGELOG.md", "usage-rules.md"],
+      groups_for_extras: [Guides: ["usage-rules.md"]],
       source_ref: "v#{@version}",
       source_url: @source_url
     ]
