@@ -140,7 +140,8 @@ defmodule NbRoutes.ResourceTypeScript do
       if Enum.empty?(action.params) do
         "route('#{action.path}', '#{verb_to_string(action.verb)}')"
       else
-        "route<#{params_type}>('#{action.path}', '#{verb_to_string(action.verb)}')"
+        method = verb_to_string(action.verb)
+        "route<#{params_type}, '#{method}'>('#{action.path}', '#{method}')"
       end
 
     """

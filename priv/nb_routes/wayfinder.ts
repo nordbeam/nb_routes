@@ -57,10 +57,16 @@ type FormFunction<P> = {
  * show.url(1)       // '/users/1'
  * show.patch(1)     // { url: '/users/1', method: 'patch' }
  */
-export function route<P extends Record<string, Param> = Record<string, never>>(
+export function route<
+  P extends Record<string, Param> = Record<string, never>,
+  M extends Method = Method,
+>(
   pattern: string,
-  defaultMethod: Method
-): RouteFunction<P extends Record<string, never> ? (P | Param | undefined) : (P | Param), typeof defaultMethod> {
+  defaultMethod: M,
+): RouteFunction<
+  P extends Record<string, never> ? P | Param | undefined : P | Param,
+  M
+> {
   const buildUrl = (params?: P | Param, options?: RouteOptions): string => {
     let url = pattern;
 
@@ -94,14 +100,16 @@ export function route<P extends Record<string, Param> = Record<string, never>>(
 
   const buildForm = (method: Method, params?: P | Param, options?: RouteOptions): FormAttrs => {
     const needsSpoof = method !== 'get' && method !== 'post';
-    const url = buildUrl(params, needsSpoof
-      ? { ...options, query: { ...options?.query, _method: method.toUpperCase() } }
-      : options
+    const url = buildUrl(
+      params,
+      needsSpoof
+        ? { ...options, query: { ...options?.query, _method: method.toUpperCase() } }
+        : options,
     );
-    return { action: url, method: needsSpoof ? 'post' : method as 'get' | 'post' };
+    return { action: url, method: needsSpoof ? 'post' : (method as 'get' | 'post') };
   };
 
-  const fn = (params?: P | Param, options?: RouteOptions): Route => ({
+  const fn = (params?: P | Param, options?: RouteOptions): Route<M> => ({
     url: buildUrl(params, options),
     method: defaultMethod,
   });
@@ -109,24 +117,30 @@ export function route<P extends Record<string, Param> = Record<string, never>>(
   fn.url = buildUrl;
   fn.get = (p?: P | Param, o?: RouteOptions) => ({ url: buildUrl(p, o), method: 'get' as const });
   fn.post = (p?: P | Param, o?: RouteOptions) => ({ url: buildUrl(p, o), method: 'post' as const });
-  fn.patch = (p?: P | Param, o?: RouteOptions) => ({ url: buildUrl(p, o), method: 'patch' as const });
+  fn.patch = (p?: P | Param, o?: RouteOptions) => ({
+    url: buildUrl(p, o),
+    method: 'patch' as const,
+  });
   fn.put = (p?: P | Param, o?: RouteOptions) => ({ url: buildUrl(p, o), method: 'put' as const });
-  fn.delete = (p?: P | Param, o?: RouteOptions) => ({ url: buildUrl(p, o), method: 'delete' as const });
+  fn.delete = (p?: P | Param, o?: RouteOptions) => ({
+    url: buildUrl(p, o),
+    method: 'delete' as const,
+  });
   fn.head = (p?: P | Param, o?: RouteOptions) => ({ url: buildUrl(p, o), method: 'head' as const });
 
-  fn.form = Object.assign(
-    (p?: P | Param, o?: RouteOptions) => buildForm(defaultMethod, p, o),
-    {
-      patch: (p?: P | Param, o?: RouteOptions) => buildForm('patch', p, o),
-      put: (p?: P | Param, o?: RouteOptions) => buildForm('put', p, o),
-      delete: (p?: P | Param, o?: RouteOptions) => buildForm('delete', p, o),
-    }
-  );
+  fn.form = Object.assign((p?: P | Param, o?: RouteOptions) => buildForm(defaultMethod, p, o), {
+    patch: (p?: P | Param, o?: RouteOptions) => buildForm('patch', p, o),
+    put: (p?: P | Param, o?: RouteOptions) => buildForm('put', p, o),
+    delete: (p?: P | Param, o?: RouteOptions) => buildForm('delete', p, o),
+  });
 
   fn.pattern = pattern;
   fn.defaultMethod = defaultMethod;
 
-  return fn as RouteFunction<P extends Record<string, never> ? (P | Param | undefined) : (P | Param), typeof defaultMethod>;
+  return fn as RouteFunction<
+    P extends Record<string, never> ? P | Param | undefined : P | Param,
+    M
+  >;
 }
 
 /**
@@ -143,15 +157,14 @@ function normalizeParams(pattern: string, params: unknown): Record<string, unkno
   if (typeof params === 'object' && params !== null) {
     const obj = params as Record<string, unknown>;
     const result: Record<string, unknown> = {};
-    const paramNames = pattern.match(/:\w+/g)?.map(p => p.slice(1)) ?? [];
+    const paramNames = pattern.match(/:\w+/g)?.map((p) => p.slice(1)) ?? [];
 
     for (const name of paramNames) {
       if (name in obj) {
         const val = obj[name];
         // Support Phoenix.Param-style extraction: { id: 42 } or { user: { id: 42 } }
-        result[name] = typeof val === 'object' && val && 'id' in val
-          ? (val as { id: unknown }).id
-          : val;
+        result[name] =
+          typeof val === 'object' && val && 'id' in val ? (val as { id: unknown }).id : val;
       } else if ('id' in obj && paramNames.length === 1) {
         // Single param route with object that has id - extract it
         result[name] = obj.id;

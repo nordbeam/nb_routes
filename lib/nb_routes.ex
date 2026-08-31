@@ -153,6 +153,10 @@ defmodule NbRoutes do
   end
 
   defp write_resource_files!(output_dir, files) when is_list(files) do
+    # Resource mode owns its output directory. Rebuild it atomically from the
+    # current router so helpers removed or renamed in Phoenix do not survive as
+    # stale, importable TypeScript modules.
+    File.rm_rf!(output_dir)
     File.mkdir_p!(output_dir)
 
     written_files =

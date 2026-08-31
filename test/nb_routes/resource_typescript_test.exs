@@ -56,7 +56,7 @@ defmodule NbRoutes.ResourceTypeScriptTest do
       assert content =~ "export interface RouteOptions"
       assert content =~ "export interface FormAttrs"
       assert content =~ "export type Param ="
-      assert content =~ "export function route<P"
+      assert content =~ "export function route<"
     end
 
     test "includes query parameter handling" do
@@ -285,6 +285,7 @@ defmodule NbRoutes.ResourceTypeScriptTest do
 
       assert content =~ "show"
       assert content =~ "route<"
+      assert content =~ "route<{ id: Param }, 'get'>"
       assert content =~ "id"
       assert content =~ "Param"
     end
