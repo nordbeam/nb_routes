@@ -63,10 +63,7 @@ export function route<
 >(
   pattern: string,
   defaultMethod: M,
-): RouteFunction<
-  P extends Record<string, never> ? P | Param | undefined : P | Param,
-  M
-> {
+): RouteFunction<P extends Record<string, never> ? P | Param | undefined : P | Param, M> {
   const buildUrl = (params?: P | Param, options?: RouteOptions): string => {
     let url = pattern;
 

@@ -82,6 +82,16 @@ defmodule NbRoutes.ResourceTypeScriptTest do
       # Should handle objects with id property
       assert content =~ ~r/['"]id['"]\s+in/i or content =~ "id"
     end
+
+    test "emits Vite+ formatted generic return type" do
+      config = Configuration.new(style: :resource, variant: :rich)
+      %{content: content} = ResourceTypeScript.generate_runtime(config)
+
+      assert content =~
+               "): RouteFunction<P extends Record<string, never> ? P | Param | undefined : P | Param, M> {"
+
+      refute content =~ ~r/: RouteFunction<\s*\n\s*P extends Record<string, never>/
+    end
   end
 
   describe "generate_resource_file/2" do
